@@ -26,26 +26,12 @@ from loguru import logger
 
 from ..core.llm import key_pool
 from ..core.llm.anthropic_client import claude_json
+from ..core.contracts import DIMENSION_KEYS, DIMENSION_WEIGHTS
 
-DIMENSIONS = [
-    "discoverability",
-    "auth",
-    "mcp",
-    "errors",
-    "idempotency",
-    "ratelimit",
-    "docs",
-]
-
-WEIGHTS: dict[str, int] = {
-    "discoverability": 15,
-    "auth": 20,
-    "mcp": 20,
-    "errors": 15,
-    "idempotency": 15,
-    "ratelimit": 10,
-    "docs": 5,
-}
+# Canonical 6 deterministic dimensions live in core.contracts (weights sum to
+# 100). We re-export them here so existing callers keep working.
+DIMENSIONS = list(DIMENSION_KEYS)
+WEIGHTS: dict[str, int] = dict(DIMENSION_WEIGHTS)
 
 # Minimum margin (|agree - disagree| / total) to consider consensus reached
 DELTA: float = 0.7
@@ -111,6 +97,156 @@ def catts_aggregate(results: list[dict]) -> dict | None:
 def score_from_dims(dims: dict) -> int:
     """Compute weighted rubric score from aggregated dimension results."""
     return sum(WEIGHTS[d] for d, v in dims.items() if v.get("passed"))
+
+
+# ---------------------------------------------------------------------------
+# Deterministic black-box scoring (the canonical rubric)
+# ---------------------------------------------------------------------------
+# This is the SOURCE OF TRUTH for a score: given observed evidence (a recon
+# bundle + two live probes), each of the 6 dimensions is a pure, deterministic
+# pass/fail — no LLM judge. The same function scores BEFORE (raw target) and
+# AFTER (through the generated proxy), so the delta is a real measured fact.
+
+
+def score_dimensions(
+    recon: dict,
+    *,
+    error_quality: tuple[bool, str] | None = None,
+    idempotency: tuple[bool, str] | None = None,
+) -> dict:
+    """Compute the 6 deterministic dimensions from observed evidence.
+
+    Args:
+        recon: a `services.recon.probe_surface` bundle (has_openapi, has_mcp,
+            has_docs, captcha, otp, token_auth, openapi, ...).
+        error_quality: optional (passed, evidence) from `recon.probe_error_quality`.
+            When omitted it is derived statically from the recon bundle
+            (presence of an OpenAPI error schema) so the function stays pure.
+        idempotency: optional (passed, evidence) from `recon.detect_idempotency`.
+            When omitted it is derived from the recon bundle's spec.
+
+    Returns the contract score shape:
+        {"total": int, "dimensions": [{"dim", "passed", "evidence"}, ...]}
+    Every dimension key in DIMENSIONS is always present.
+    """
+    recon = recon or {}
+    openapi = recon.get("openapi") if isinstance(recon, dict) else None
+
+    # --- api_surface: discoverable programmatic surface ---------------------
+    if recon.get("has_openapi"):
+        api_passed, api_ev = True, "OpenAPI/Swagger spec discoverable and parseable"
+    elif recon.get("found", {}).get("/api"):
+        api_passed, api_ev = True, "reachable /api surface (no spec)"
+    else:
+        api_passed, api_ev = False, "no OpenAPI spec and no discoverable /api surface"
+
+    # --- auth: deterministic agent auth without human gate ------------------
+    if recon.get("captcha"):
+        auth_passed, auth_ev = False, "CAPTCHA detected on the auth surface — human-only"
+    elif recon.get("otp"):
+        auth_passed, auth_ev = False, "OTP / magic-link login detected — not agent-drivable"
+    elif recon.get("token_auth") or recon.get("has_openapi"):
+        auth_passed, auth_ev = (
+            True,
+            "token/key (or OpenAPI security) auth — deterministic for an agent",
+        )
+    else:
+        auth_passed, auth_ev = False, "no token/key auth signal; auth path unproven"
+
+    # --- error_quality: structured 4xx, not 200-with-error ------------------
+    if error_quality is not None:
+        err_passed, err_ev = bool(error_quality[0]), str(error_quality[1])
+    else:
+        # Static fallback: does the spec declare 4xx responses with schemas?
+        err_passed, err_ev = _spec_declares_errors(openapi)
+
+    # --- idempotency: safe-retry / no duplicate side effects ----------------
+    if idempotency is not None:
+        idem_passed, idem_ev = bool(idempotency[0]), str(idempotency[1])
+    else:
+        idem_passed, idem_ev = _static_idempotency(openapi)
+
+    # --- mcp_availability: MCP endpoint discoverable ------------------------
+    if recon.get("has_mcp"):
+        mcp_passed, mcp_ev = True, "MCP endpoint / .well-known/mcp.json discoverable"
+    else:
+        mcp_passed, mcp_ev = False, "no MCP endpoint or manifest found"
+
+    # --- docs: machine-readable agent docs ----------------------------------
+    if recon.get("has_docs"):
+        docs_passed, docs_ev = True, "machine-readable agent docs present (llms.txt / ai-plugin)"
+    elif recon.get("has_openapi"):
+        docs_passed, docs_ev = True, "OpenAPI doubles as machine-readable documentation"
+    else:
+        docs_passed, docs_ev = False, "no llms.txt / machine-readable docs"
+
+    verdicts = {
+        "api_surface": (api_passed, api_ev),
+        "auth": (auth_passed, auth_ev),
+        "error_quality": (err_passed, err_ev),
+        "idempotency": (idem_passed, idem_ev),
+        "mcp_availability": (mcp_passed, mcp_ev),
+        "docs": (docs_passed, docs_ev),
+    }
+
+    dimensions = [
+        {"dim": dim, "passed": bool(verdicts[dim][0]), "evidence": verdicts[dim][1]}
+        for dim in DIMENSIONS
+    ]
+    total = sum(WEIGHTS[d["dim"]] for d in dimensions if d["passed"])
+    return {"total": total, "dimensions": dimensions}
+
+
+def _spec_declares_errors(openapi: dict | None) -> tuple[bool, str]:
+    """Static error-quality check: does the spec declare 4xx responses w/ schema?"""
+    if not isinstance(openapi, dict):
+        return False, "no spec — error contract unverified"
+    paths = openapi.get("paths") or {}
+    if not isinstance(paths, dict):
+        return False, "spec has no paths"
+    for ops in paths.values():
+        if not isinstance(ops, dict):
+            continue
+        for op in ops.values():
+            if not isinstance(op, dict):
+                continue
+            responses = op.get("responses") or {}
+            if not isinstance(responses, dict):
+                continue
+            for code, resp in responses.items():
+                if str(code).startswith("4") and isinstance(resp, dict):
+                    if resp.get("content") or resp.get("schema"):
+                        return True, f"spec declares structured 4xx responses (e.g. {code})"
+    return False, "spec declares no structured 4xx error responses"
+
+
+def _static_idempotency(openapi: dict | None) -> tuple[bool, str]:
+    """Static idempotency check mirroring recon.detect_idempotency, spec-only."""
+    if not isinstance(openapi, dict):
+        return False, "no spec — cannot prove safe-retry"
+    paths = openapi.get("paths") or {}
+    if not isinstance(paths, dict):
+        return False, "spec has no paths"
+    has_idem_header = False
+    has_put = False
+    for ops in paths.values():
+        if not isinstance(ops, dict):
+            continue
+        for method, op in ops.items():
+            if str(method).lower() == "put":
+                has_put = True
+            if not isinstance(op, dict):
+                continue
+            for param in op.get("parameters", []) or []:
+                if isinstance(param, dict) and "idempotency" in str(
+                    param.get("name", "")
+                ).lower():
+                    has_idem_header = True
+    if has_idem_header:
+        return True, "explicit Idempotency-Key header parameter"
+    if has_put:
+        return True, "PUT routes present (idempotent by HTTP contract)"
+    return False, "no idempotency mechanism advertised"
 
 
 # ---------------------------------------------------------------------------

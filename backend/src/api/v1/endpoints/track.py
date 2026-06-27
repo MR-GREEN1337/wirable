@@ -31,7 +31,7 @@ async def track_open(
     Record an email open event (first open only) and return a tracking pixel.
 
     The pixel URL is embedded in outbound cold emails as:
-      <img src="https://api.agentready.dev/api/v1/track/open/{token}" width="1" height="1" />
+      <img src="https://api.wirable.dev/api/v1/track/open/{token}" width="1" height="1" />
     """
     await db.execute(
         update(OutboundEmail)

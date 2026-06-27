@@ -10,20 +10,9 @@ class Settings(BaseSettings):
     ANTHROPIC_API_KEY: str = ""
     ANTHROPIC_API_KEYS: str = ""  # comma-separated pool; rotated across requests
     ANTHROPIC_MODEL: str = "claude-sonnet-4-6"
-    SCOUT_ENABLED: bool = False
-    SCOUT_INTERVAL_MINUTES: int = 30
-    SCOUT_BATCH_SIZE: int = 3
-    GITHUB_CLIENT_ID: str = ""
-    GITHUB_CLIENT_SECRET: str = ""
-    # Where GitHub redirects back after OAuth consent. Defaults to
-    # f"{REPORT_BASE_URL}/github" (resolved in the authorize-url endpoint).
-    GITHUB_REDIRECT_URI: str = ""
-    UNIPILE_DSN: str = ""
-    UNIPILE_API_KEY: str = ""
-    UNIPILE_ACCOUNT_ID: str = ""
-    SENDING_EMAIL: str = ""
     INTERNAL_SECRET: str = ""
-    REPORT_BASE_URL: str = "http://localhost:3000"
+    # Public base URL of the Wirable web app (used for absolute links).
+    APP_BASE_URL: str = "http://localhost:3000"
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

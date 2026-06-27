@@ -3,7 +3,7 @@ import { CtaButton } from "@/components/CtaButton";
 import { HeroAudit } from "./HeroAudit";
 import { Search, ScanLine, Mail, GitPullRequest, CircleCheck } from "lucide-react";
 
-/* ── The standard AgentReady defines ───────────────────────────────────────────
+/* ── The standard Wirable defines ───────────────────────────────────────────
    7 weighted dimensions, summing to 100. The score is the product. */
 
 const RUBRIC: { dim: string; key: string; weight: number; note: string }[] = [
@@ -87,7 +87,7 @@ function Nav() {
           className="font-display text-sm font-bold uppercase tracking-[0.08em]"
           style={{ color: "var(--foreground)" }}
         >
-          AgentReady
+          Wirable
         </a>
 
         <div className="ml-8 hidden flex-1 items-center gap-6 text-[13px] sm:flex">
@@ -257,7 +257,7 @@ export default async function LandingPage() {
               className="mx-auto mt-5 text-center text-[13px]"
               style={{ color: "var(--fg-subtle)" }}
             >
-              Free audit, no account &middot; connect GitHub for the fix PR
+              Free test, no account &middot; generate a hosted MCP proxy to fix it
             </p>
           </Reveal>
         </div>
@@ -482,7 +482,7 @@ export default async function LandingPage() {
           style={{ color: "var(--muted-foreground)" }}
         >
           <span className="font-display text-sm font-bold uppercase tracking-[0.08em]" style={{ color: "var(--foreground)" }}>
-            AgentReady
+            Wirable
           </span>
           <span>The standard for agent-readiness &middot; find, audit, fix, verify.</span>
           <span className="data text-[12px]">&copy; {new Date().getFullYear()}</span>

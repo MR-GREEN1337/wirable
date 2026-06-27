@@ -1,5 +1,5 @@
 """
-LLM integration for AgentReady.
+LLM integration for Wirable.
 
 Public surface other modules import:
     from src.core.llm import key_pool

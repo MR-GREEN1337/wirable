@@ -1,5 +1,5 @@
 """
-Thin async Daytona wrapper for AgentReady.
+Thin async Daytona wrapper for Wirable.
 
 Each audit/fix job gets an isolated sandbox:
   async with DaytonaClient.sandbox() as sb:

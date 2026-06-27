@@ -88,7 +88,7 @@ async def guest_auth(
     """
     name = body.name or _random_name()
     uid = _uuid.uuid4()
-    email = f"guest-{uid.hex[:10]}@guest.agentready"
+    email = f"guest-{uid.hex[:10]}@guest.wirable"
     user = User(id=uid, email=email, name=name)
     db.add(user)
     await db.commit()

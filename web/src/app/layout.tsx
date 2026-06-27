@@ -30,15 +30,15 @@ const jetbrainsMono = JetBrains_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "AgentReady",
-    template: "%s — AgentReady",
+    default: "Wirable",
+    template: "%s — Wirable",
   },
   description:
-    "Audit your product for AI agent compatibility. Get a score, a fix PR, and verified proof — in minutes.",
+    "Test whether an AI agent can complete real workflows on your platform, get a score, then host an MCP proxy that fixes the breakage.",
   openGraph: {
-    title: "AgentReady",
+    title: "Wirable",
     description:
-      "Audit your product for AI agent compatibility. Get a score, a fix PR, and verified proof — in minutes.",
+      "Test whether an AI agent can complete real workflows on your platform, get a score, then host an MCP proxy that fixes the breakage.",
     type: "website",
   },
 };

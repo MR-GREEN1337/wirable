@@ -1,6 +1,17 @@
 """
-Dashboard endpoint — returns the current state of the authenticated user's
-audit + fix pipeline in a single response.
+Dashboard endpoint (Wirable) — the list of targets the user has run, each with
+its latest test score and proxy status.
+
+Shape (per target):
+  {
+    "company_id", "domain", "name",
+    "score", "confidence", "last_run_at",
+    "proxy_status": "none" | "ready",   # ready once a proxy has been generated
+    "mcp_url": str | null,
+  }
+
+Reuses the Company/Audit/MCP tables (no schema churn). The MCP row, when
+present, represents the generated proxy config + hosted endpoint.
 """
 import uuid as _uuid
 
@@ -11,9 +22,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ....core.auth import get_current_user
 from ....core.database import get_session
 from ....models.client import Client
-from ....models.audit import Audit, AuditStep
+from ....models.audit import Audit
 from ....models.mcp import MCP
 from ....models.company import Company
+from ....services import proxy_runtime
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
 
@@ -23,112 +35,65 @@ async def get_dashboard(
     db: AsyncSession = Depends(get_session),
     user: dict = Depends(get_current_user),
 ):
-    """
-    Returns the full dashboard state for the authenticated user.
-
-    Possible states:
-    - "no_client"   — user hasn't gone through onboarding yet
-    - "pending"     — client created, no audit run yet
-    - "analyzing"   — audit in progress
-    - "generating"  — fix agent running
-    - "pr_open"     — PR is open, awaiting merge
-    - "verified"    — post-merge audit verified the fix
-    - "done"        — everything complete
-    """
-    # Look up client
+    """Return the authenticated user's targets with score + proxy status."""
     result = await db.execute(
         select(Client).where(Client.user_id == _uuid.UUID(user["sub"]))
     )
     client = result.scalar_one_or_none()
     if not client:
-        return {"state": "no_client"}
+        return {"state": "no_client", "targets": []}
 
-    # Load company
-    company_data = None
+    targets: list[dict] = []
+
     if client.company_id:
-        co_result = await db.execute(
+        co_res = await db.execute(
             select(Company).where(Company.id == client.company_id)
         )
-        co = co_result.scalar_one_or_none()
+        co = co_res.scalar_one_or_none()
         if co:
-            company_data = {
-                "id": str(co.id),
-                "domain": co.domain,
-                "name": co.name,
-                "founder_name": co.founder_name,
-                "founder_email": co.founder_email,
-                "outbound_status": co.outbound_status,
-            }
-
-    # Load latest audit
-    audit_data = None
-    if client.company_id:
-        audit_result = await db.execute(
-            select(Audit)
-            .where(Audit.company_id == client.company_id)
-            .order_by(Audit.created_at.desc())
-        )
-        audit = audit_result.scalar_one_or_none()
-        if audit:
-            steps_result = await db.execute(
-                select(AuditStep).where(AuditStep.audit_id == audit.id)
+            # Latest test run for this target.
+            audit_res = await db.execute(
+                select(Audit)
+                .where(Audit.company_id == co.id)
+                .order_by(Audit.created_at.desc())
             )
-            steps = steps_result.scalars().all()
-            audit_data = {
-                "id": str(audit.id),
-                "score": audit.score,
-                "confidence": audit.confidence,
-                "n_agents": audit.n_agents,
-                "report_url": audit.report_url,
-                "is_post_fix": audit.is_post_fix,
-                "created_at": audit.created_at.isoformat(),
-                "dimensions": [
-                    {
-                        "dimension": s.dimension,
-                        "passed": s.passed,
-                        "confidence": s.confidence,
-                        "weight": s.weight,
-                        "evidence": s.evidence,
-                    }
-                    for s in steps
-                ],
-            }
+            audit = audit_res.scalars().first()
 
-    # Load latest MCP record
-    fix_data = None
-    mcp_result = await db.execute(
-        select(MCP)
-        .where(MCP.client_id == client.id)
-        .order_by(MCP.created_at.desc())
-    )
-    mcp = mcp_result.scalar_one_or_none()
-    if mcp:
-        fix_data = {
-            "id": str(mcp.id),
-            "audit_id": str(mcp.audit_id) if mcp.audit_id else None,
-            "pr_url": mcp.pr_url,
-            "pr_number": mcp.pr_number,
-            "pr_files": [],
-            "status": mcp.pr_status or "pending",
-            "before_score": audit_data["score"] if audit_data else 0,
-            "after_score": mcp.projected_score or 0,
-            "before_dims": {s["dimension"]: {"passed": s["passed"]} for s in (audit_data.get("dimensions") or [])} if audit_data else {},
-            "after_dims": (
-                {d: {"passed": True, "needs_live": False} for d in (mcp.verified_dims or [])}
-                | {d: {"passed": False, "needs_live": True} for d in (mcp.unverified_dims or [])}
-            ),
-        }
+            # Latest generated proxy (MCP row), if any.
+            mcp_res = await db.execute(
+                select(MCP)
+                .where(MCP.client_id == client.id)
+                .order_by(MCP.created_at.desc())
+            )
+            mcp = mcp_res.scalars().first()
 
-    # Attach domain to audit_data for the frontend
-    if audit_data and company_data:
-        audit_data["domain"] = company_data["domain"]
+            # Hosted proxy details (mcp_url + agent-call count) from the runtime,
+            # which reads the persisted ProxyConfig + counters off the MCP row.
+            mcp_url = None
+            agent_calls = 0
+            tool_count = 0
+            if mcp is not None:
+                meta = await proxy_runtime.get_proxy_meta(str(mcp.id))
+                if meta:
+                    mcp_url = meta.get("mcp_url") or proxy_runtime.mcp_url_for(str(mcp.id))
+                    agent_calls = meta.get("agent_calls", 0)
+                    tool_count = meta.get("tool_count", 0)
 
-    return {
-        "state": client.fix_status or "pending",
-        "company": company_data,
-        "audit": audit_data,
-        "fix": fix_data,
-        "github_connected": bool(client.github_token),
-        "github_repo": client.github_repo,
-        "recent_audits": [],
-    }
+            targets.append(
+                {
+                    "company_id": str(co.id),
+                    "domain": co.domain,
+                    "name": co.name,
+                    "score": audit.score if audit else co.score,
+                    "confidence": audit.confidence if audit else co.confidence,
+                    "last_run_at": (
+                        audit.created_at.isoformat() if audit else None
+                    ),
+                    "proxy_status": "ready" if mcp else "none",
+                    "mcp_url": mcp_url,
+                    "agent_calls": agent_calls,
+                    "tool_count": tool_count,
+                }
+            )
+
+    return {"state": "ok", "targets": targets}

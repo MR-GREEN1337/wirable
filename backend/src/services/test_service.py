@@ -1,8 +1,13 @@
 """
-Audit service — orchestrates N parallel Daytona sandboxes running the audit agent,
-then aggregates results with CATTS.
+Test service (Wirable) — the workflow TEST engine. Orchestrates N parallel
+Daytona sandboxes that drive the canonical agent workflows against a target,
+then aggregates results with CATTS into the 6 deterministic score dimensions.
 
-SSE progress is streamed via per-job asyncio.Queue instances.
+This module also owns the in-process SSE bus (emit / subscribe) that the
+orchestrator and the run endpoints reuse — keep that mechanism intact.
+
+Historically named "audit_service"; the public concept is now a "run".
+`run_test` is the canonical entry point; `run_audit` is kept as an alias.
 """
 import asyncio
 import json
@@ -445,3 +450,13 @@ async def persist_audit_result(
 
     await db.commit()
     return co
+
+
+# ---------------------------------------------------------------------------
+# Canonical Wirable names (aliases). The public concept is a "run"/"test"; the
+# underlying engine kept its historical `run_audit` / `persist_audit_result`
+# names to avoid churning every call site at once.
+# ---------------------------------------------------------------------------
+
+run_test = run_audit
+persist_test_result = persist_audit_result

@@ -340,7 +340,7 @@ export function AuditTerminal({
               className={cn("text-[11px]", !hasShots && "ml-2")}
               style={{ color: "var(--t-muted)" }}
             >
-              agentready — {domain || "awaiting domain"}
+              wirable — {domain || "awaiting domain"}
             </span>
             {isRunning && (
               <span
@@ -362,7 +362,7 @@ export function AuditTerminal({
                 className="select-none text-[11px]"
                 style={{ color: "var(--t-muted)" }}
               >
-                <span>$ agentready audit {domain || "<domain>"}</span>
+                <span>$ wirable run {domain || "<domain>"}</span>
                 <span
                   className="ml-0.5 inline-block h-3 w-1.5 align-middle"
                   style={{

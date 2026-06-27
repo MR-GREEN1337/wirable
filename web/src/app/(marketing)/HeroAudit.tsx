@@ -18,7 +18,6 @@ export function HeroAudit() {
   const [score, setScore] = useState<number | undefined>();
   const [confidence, setConfidence] = useState<number | undefined>();
   const [reportId, setReportId] = useState<string | undefined>();
-  const [auditedDomain, setAuditedDomain] = useState<string>("");
   const [running, setRunning] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const esRef = useRef<EventSource | null>(null);
@@ -33,16 +32,15 @@ export function HeroAudit() {
     setScore(undefined);
     setConfidence(undefined);
     setReportId(undefined);
-    setAuditedDomain(raw);
     setError(null);
     setRunning(true);
 
     try {
-      // Kick off the audit job
-      const res = await fetch(`${BACKEND_URL}/api/v1/audit/request`, {
+      // Kick off the test run (Wirable contract: POST /run {url}).
+      const res = await fetch(`${BACKEND_URL}/api/v1/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ domain: raw }),
+        body: JSON.stringify({ url: raw }),
       });
 
       if (!res.ok) {
@@ -50,26 +48,23 @@ export function HeroAudit() {
         throw new Error(txt || `HTTP ${res.status}`);
       }
 
-      const { job_id } = await res.json() as { job_id: string };
+      const { run_id } = await res.json() as { run_id: string };
+      setReportId(run_id);
 
-      // Connect SSE stream
-      const es = new EventSource(`${BACKEND_URL}/api/v1/audit/${job_id}/stream`);
+      // Connect to the run-event SSE stream (see core.contracts for shapes).
+      const es = new EventSource(`${BACKEND_URL}/api/v1/run/${run_id}/stream`);
       esRef.current = es;
 
       es.onmessage = (ev) => {
         try {
           const data = JSON.parse(ev.data) as {
             type?: string;
-            line?: TerminalLine;
             ok?: boolean;
             msg?: string;
-            score?: number;
-            confidence?: number;
-            report_id?: string;
+            total?: number;
             seq?: number;
             caption?: string;
             dimension?: string;
-            url?: string;
             image?: string;
           };
 
@@ -81,25 +76,21 @@ export function HeroAudit() {
               seq: data.seq,
               caption: data.caption ?? "",
               dimension: data.dimension,
-              url: data.url,
               image: data.image,
             };
             setScreenshots((prev) =>
               prev.some((s) => s.seq === shot.seq) ? prev : [...prev, shot]
             );
-          } else if (data.type === "score" && data.score !== undefined) {
-            setScore(data.score);
-            setConfidence(data.confidence);
-            if (data.report_id) setReportId(data.report_id);
+          } else if (data.type === "score" && data.total !== undefined) {
+            setScore(data.total);
+            // Wave 2: the run page renders the full breakdown + proxy gate.
+            const q = raw ? `?domain=${encodeURIComponent(raw)}` : "";
+            setTimeout(() => router.push(`/run/${run_id}${q}`), 1500);
+          } else if (data.type === "done") {
             es.close();
             setRunning(false);
-            if (data.report_id) {
-              // Navigate to the full report after a beat. The fallback CTA
-              // below covers the case where navigation is blocked/cancelled.
-              setTimeout(() => router.push(`/report/${data.report_id}`), 1500);
-            }
           } else if (data.type === "error") {
-            setError("Audit failed — check the domain and try again.");
+            setError("Run failed — check the URL and try again.");
             es.close();
             setRunning(false);
           }
@@ -150,7 +141,7 @@ export function HeroAudit() {
           disabled={running || !domain.trim()}
           size="sm"
         >
-          {running ? "Running…" : "Audit"}
+          {running ? "Running…" : "Test"}
         </CtaButton>
       </form>
 
@@ -181,33 +172,18 @@ export function HeroAudit() {
       )}
 
       {/* Next-action CTA — never leave the user staring at a finished terminal */}
-      {score !== undefined && !running && (
+      {score !== undefined && !running && reportId && (
         <div className="flex flex-wrap items-center gap-3">
-          {reportId && (
-            <Link
-              href={`/report/${reportId}`}
-              className="group inline-flex items-center gap-1.5 rounded border px-4 py-2 text-sm font-medium transition-colors"
-              style={{
-                borderColor: "var(--border-strong)",
-                background: "var(--surface-1)",
-                color: "var(--foreground)",
-              }}
-            >
-              See full report
-              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-            </Link>
-          )}
           <Link
-            href={`/signin?callbackUrl=${encodeURIComponent(
-              `/onboarding?domain=${auditedDomain}`
-            )}`}
-            className="group inline-flex items-center gap-1.5 rounded px-4 py-2 text-sm font-medium transition-transform hover:-translate-y-px"
+            href={`/run/${reportId}${domain.trim() ? `?domain=${encodeURIComponent(domain.trim().replace(/^https?:\/\//, "").replace(/\/$/, ""))}` : ""}`}
+            className="group inline-flex items-center gap-1.5 rounded border px-4 py-2 text-sm font-medium transition-colors"
             style={{
-              background: "var(--primary)",
-              color: "var(--primary-foreground)",
+              borderColor: "var(--border-strong)",
+              background: "var(--surface-1)",
+              color: "var(--foreground)",
             }}
           >
-            Fix this
+            See the run + generate proxy
             <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
           </Link>
         </div>

@@ -32,15 +32,12 @@ export default async function DashboardLayout({
       >
         <div className="mx-auto flex h-12 max-w-6xl items-center gap-6 px-6">
           <a href="/dashboard" className="font-display text-sm font-bold uppercase tracking-wider">
-            AgentReady
+            Wirable
           </a>
 
           <div className="flex flex-1 items-center gap-6 text-xs">
             <a href="/dashboard" className="cn-hover" style={{ color: "var(--muted-foreground)" }}>
               Dashboard
-            </a>
-            <a href="/console" className="cn-hover" style={{ color: "var(--muted-foreground)" }}>
-              Scout
             </a>
           </div>
 

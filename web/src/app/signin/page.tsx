@@ -108,13 +108,13 @@ export default function SignInPage() {
         {/* Wordmark */}
         <div className="text-center">
           <p className="eyebrow mb-3" style={{ color: "var(--muted-foreground)" }}>
-            agent-readiness platform
+            agent workflow proxy
           </p>
           <h1
             className="font-display text-[1.75rem] font-semibold tracking-tight"
             style={{ color: "var(--foreground)" }}
           >
-            AgentReady
+            Wirable
           </h1>
         </div>
 

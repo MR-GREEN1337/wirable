@@ -1,15 +1,17 @@
 """
-Verification service — the post-fix re-audit that EARNS the moat.
+Verification service — the before/after re-test that EARNS the moat.
 
-After a fix PR is opened, we re-run the SAME audit engine against the domain and
+# TODO(Wave2): REWORK to emit the canonical `verify` run-event (core.contracts)
+#   and to re-test THROUGH the generated proxy (not just re-run the raw target).
+#   Currently orphaned: its old caller (the /fix endpoint) was removed in Wave 1.
+#   Kept as the reference implementation for the real verify phase.
+
+After a proxy is deployed, we re-run the test engine against the target and
 persist the result as a NEW Audit row with is_post_fix=True (no new table — we
-reuse the Audit model). The "before" score is the latest is_post_fix=False audit;
-the "after" score is this new is_post_fix=True audit.
+reuse the Audit model). The "before" score is the latest is_post_fix=False run;
+the "after" score is this new is_post_fix=True run.
 
-SSE: verification streams over the SAME audit bus (audit_service.emit / subscribe)
-so the frontend reuses GET /audit/{job_id}/stream. We add a final "verification"
-summary event with before_score / after_score / delta on top of the audit
-engine's own "score" + "done" events.
+SSE: verification streams over the SAME bus (test_service.emit / subscribe).
 """
 import uuid
 from datetime import datetime
@@ -21,7 +23,7 @@ from ..models.audit import Audit, AuditStep
 from ..models.client import Client
 from ..models.company import Company
 from ..models.mcp import MCP
-from ..services import audit_service
+from ..services import test_service as audit_service
 
 
 async def run_verification(company_id: str, domain: str, job_id: str) -> dict:
