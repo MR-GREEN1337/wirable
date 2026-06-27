@@ -1,0 +1,2001 @@
+/* Runtime-loaded decorative fonts — loaded by browser, not at Docker build time */
+@import url("https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400..900;1,700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&display=swap");
+
+@import "tailwindcss";
+@import "tw-animate-css";
+
+:root {
+  --font-playfair: "Playfair Display", serif;
+  --font-pixelify: "Chakra Petch", sans-serif;
+}
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@keyframes gradient-x {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@keyframes shimmer {
+  to {
+    transform: translateX(300%);
+  }
+}
+
+/* Logo arcs background float — used in CTA, onboarding, 404, auth */
+@keyframes arcs-float {
+  0%,
+  100% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@theme inline {
+  --animate-gradient-x: gradient-x 1s ease infinite;
+  --animate-shimmer: shimmer 1s infinite;
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-roobert);
+  --font-mono: var(--font-roobert-mono);
+  --font-display: var(
+    --font-pixelify
+  ); /* Chakra Petch — eyebrows, step numbers, section labels */
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+
+  /* CrossNode design system tokens — see /DESIGN.md */
+  --color-surface-1: var(--surface-1);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-primary-soft: var(--primary-soft);
+  --color-fg-subtle: var(--fg-subtle);
+  --color-border-strong: var(--border-strong);
+
+  /* Semantic status ramp — named so status colors stop being invented ad-hoc.
+     One accent (primary/ciel-bleu) still leads the product; these are reserved
+     for state (success/warning/info/danger) on badges, toasts, status dots. */
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
+  --color-info: var(--info);
+  --color-info-foreground: var(--info-foreground);
+  --color-danger: var(--destructive);
+  --color-danger-foreground: var(--destructive-foreground);
+
+  /* Motion vocabulary — DESIGN.md's 80/120/200ms as tokens (was hardcoded). */
+  --ease-cn-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-cn-exit: cubic-bezier(0.7, 0, 0.84, 0);
+
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --animate-accordion-down: accordion-down 0.2s ease-out;
+  --animate-accordion-up: accordion-up 0.2s ease-out;
+  --animate-marquee: marquee var(--duration) infinite linear;
+  --animate-marquee-vertical: marquee-vertical var(--duration) linear infinite;
+  --animate-orbit: orbit calc(var(--duration) * 1s) linear infinite;
+  --animate-slide-down: slide-down 300ms cubic-bezier(0.87, 0, 0.13, 1);
+  --animate-slide-up: slide-up 300ms cubic-bezier(0.87, 0, 0.13, 1);
+  --scaleIn: scaleIn 200ms ease;
+  --scaleOut: scaleOut 200ms ease;
+  --fadeIn: fadeIn 200ms ease;
+  --fadeOut: fadeOut 200ms ease;
+  --enterFromLeft: enterFromLeft 250ms ease;
+  --enterFromRight: enterFromRight 250ms ease;
+  --exitToLeft: exitToLeft 250ms ease;
+  --exitToRight: exitToRight 250ms ease;
+  --animate-elliptical-orbit: elliptical-orbit 20s linear infinite;
+  --animate-shiny-text: shiny-text 8s infinite;
+  --animate-border-beam: border-beam var(--duration) infinite linear;
+
+  @keyframes orbit {
+    0% {
+      transform: rotate(calc(var(--angle) * 1deg))
+        translateY(calc(var(--radius) * 1px)) rotate(calc(var(--angle) * -1deg));
+    }
+
+    100% {
+      transform: rotate(calc(var(--angle) * 1deg + 360deg))
+        translateY(calc(var(--radius) * 1px))
+        rotate(calc((var(--angle) * -1deg) - 360deg));
+    }
+  }
+
+  @keyframes accordion-down {
+    from {
+      height: 0;
+    }
+
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+
+  @keyframes accordion-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+
+    to {
+      height: 0;
+    }
+  }
+
+  @keyframes marquee {
+    from {
+      transform: translateX(0);
+    }
+
+    to {
+      transform: translateX(calc(-100% - var(--gap)));
+    }
+  }
+
+  @keyframes marquee-vertical {
+    from {
+      transform: translateY(0);
+    }
+
+    to {
+      transform: translateY(calc(-100% - var(--gap)));
+    }
+  }
+
+  @keyframes slide-down {
+    from {
+      height: 0px;
+    }
+
+    to {
+      height: var(--radix-accordion-content-height);
+    }
+  }
+
+  @keyframes slide-up {
+    from {
+      height: var(--radix-accordion-content-height);
+    }
+
+    to {
+      height: 0px;
+    }
+  }
+
+  /* Add this to your globals.css */
+  @keyframes enterFromRight {
+    from {
+      opacity: 0;
+      transform: translateX(200px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes enterFromLeft {
+    from {
+      opacity: 0;
+      transform: translateX(-200px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes exitToRight {
+    from {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    to {
+      opacity: 0;
+      transform: translateX(200px);
+    }
+  }
+
+  @keyframes exitToLeft {
+    from {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    to {
+      opacity: 0;
+      transform: translateX(-200px);
+    }
+  }
+
+  @keyframes scaleIn {
+    from {
+      opacity: 0;
+      transform: rotateX(-30deg) scale(0.9);
+    }
+
+    to {
+      opacity: 1;
+      transform: rotateX(0deg) scale(1);
+    }
+  }
+
+  @keyframes scaleOut {
+    from {
+      opacity: 1;
+      transform: rotateX(0deg) scale(1);
+    }
+
+    to {
+      opacity: 0;
+      transform: rotateX(-10deg) scale(0.95);
+    }
+  }
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes fadeOut {
+    from {
+      opacity: 1;
+    }
+
+    to {
+      opacity: 0;
+    }
+  }
+
+  @keyframes elliptical-orbit {
+    from {
+      transform: rotate(var(--angle, 0) deg)
+        translate(var(--h-radius, 160px), 0)
+        rotate(calc(var(--angle, 0) deg * -1));
+    }
+
+    to {
+      transform: rotate(calc(var(--angle, 0) deg + 360deg))
+        translate(var(--h-radius, 160px), 0)
+        rotate(calc((var(--angle, 0) deg + 360deg) * -1));
+    }
+  }
+
+  @keyframes shiny-text {
+    0%,
+    90%,
+    100% {
+      background-position: calc(-100% - var(--shiny-width)) 0;
+    }
+
+    30%,
+    60% {
+      background-position: calc(100% + var(--shiny-width)) 0;
+    }
+  }
+
+  @keyframes border-beam {
+    100% {
+      offset-distance: 100%;
+    }
+  }
+
+  @keyframes flow-animation {
+    from {
+      stroke-dashoffset: 20;
+    }
+
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+}
+
+:root,
+.light {
+  /* ========================================================================
+     CrossNode Design System — Light Mode (Lyra)
+     `.light` mirrors :root so a subtree can be force-lit even when the root
+     <html> carries `.dark` (used on the marketing landing + auth surfaces).
+     See /DESIGN.md. Aesthetic: precision instrument, ciel bleu signature.
+     Primary extracted from the DashboardHero bloom: sky 400→500 with a
+     touch of indigo at the falloff edge.
+     ======================================================================== */
+
+  /* --- Base surfaces --- */
+  --background: oklch(0.985 0.004 235); /* paper, sky-tinted */
+  --foreground: oklch(0.2 0.025 245); /* primary text */
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.025 245);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.025 245);
+
+  /* --- Surface elevation scale (no shadows) --- */
+  --surface-1: oklch(1 0 0);
+  --surface-2: oklch(0.97 0.008 235);
+  --surface-3: oklch(0.94 0.012 235);
+
+  /* --- Primary: ciel bleu (matches DashboardHero bloom) --- */
+  --primary: oklch(0.65 0.16 240); /* sky-500 territory */
+  --primary-foreground: oklch(0.99 0 0);
+  --primary-soft: oklch(0.95 0.04 240); /* tint background */
+
+  /* --- Secondary: neutral surface, not a color --- */
+  --secondary: oklch(0.97 0.008 235);
+  --secondary-foreground: oklch(0.2 0.025 245);
+
+  /* --- Muted / fg hierarchy --- */
+  --muted: oklch(0.97 0.008 235);
+  --muted-foreground: oklch(0.5 0.02 245);
+  --fg-subtle: oklch(0.65 0.012 245);
+
+  /* --- Accent: hover surface --- */
+  --accent: oklch(0.94 0.012 235);
+  --accent-foreground: oklch(0.2 0.025 245);
+
+  /* --- Destructive --- */
+  --destructive: oklch(0.6 0.22 25);
+  --destructive-foreground: oklch(0.99 0 0);
+
+  /* --- Semantic status ramp (light) --- */
+  --success: oklch(0.62 0.16 150);
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.72 0.15 75);
+  --warning-foreground: oklch(0.2 0.025 245);
+  --info: oklch(0.65 0.16 240); /* ciel bleu — matches primary */
+  --info-foreground: oklch(0.99 0 0);
+
+  /* --- Motion durations (DESIGN.md scale) --- */
+  --duration-fast: 80ms;
+  --duration-normal: 120ms;
+  --duration-moderate: 200ms;
+  --duration-slow: 300ms;
+
+  /* --- Borders --- */
+  --border: oklch(0.92 0.008 235);
+  --border-strong: oklch(0.85 0.012 235);
+  --input: oklch(0.92 0.008 235);
+  --ring: oklch(0.65 0.16 240);
+
+  /* --- Charts: sky-led palette --- */
+  --chart-1: oklch(0.65 0.16 240); /* primary sky */
+  --chart-2: oklch(0.62 0.18 270); /* indigo (bloom edge) */
+  --chart-3: oklch(0.72 0.16 195); /* cyan/teal */
+  --chart-4: oklch(0.75 0.15 75); /* warm amber */
+  --chart-5: oklch(0.6 0.22 25); /* danger red */
+
+  --radius: 0.5rem;
+
+  /* --- Sidebar --- */
+  --sidebar: oklch(0.985 0.004 235);
+  --sidebar-foreground: oklch(0.2 0.025 245);
+  --sidebar-primary: oklch(0.65 0.16 240);
+  --sidebar-primary-foreground: oklch(0.99 0 0);
+  --sidebar-accent: oklch(0.94 0.012 235);
+  --sidebar-accent-foreground: oklch(0.2 0.025 245);
+  --sidebar-border: oklch(0.92 0.008 235);
+  --sidebar-ring: oklch(0.65 0.16 240);
+
+  /* Lyra: boxy + sharp. Override --radius to 2px. */
+  --radius: 0.125rem;
+
+  /* Terminal inline blocks (light mode — subtle dark tint on white) */
+  --terminal-bg: oklch(0.18 0.006 250);
+  --terminal-fg: oklch(0.9 0.005 240);
+  --terminal-border: oklch(0.28 0.008 250);
+  --terminal-green: #22c55e;
+  --terminal-red: #ef4444;
+  --terminal-yellow: #f59e0b;
+}
+
+.dark {
+  /* ========================================================================
+     CrossNode Design System — Dark Mode
+     Lifted Lyra: cool-tinted surfaces with a +3 elevation staircase.
+     Background sits at 0.13 (Linear/Vercel territory) instead of 0.08.
+     ======================================================================== */
+
+  --background: oklch(0.13 0.006 250); /* graphite, slight cool */
+  --foreground: oklch(0.97 0.003 240);
+
+  --card: oklch(0.16 0.006 250); /* surface-1 */
+  --card-foreground: oklch(0.97 0.003 240);
+  --popover: oklch(0.16 0.006 250);
+  --popover-foreground: oklch(0.97 0.003 240);
+
+  /* --- Surface elevation scale --- */
+  --surface-1: oklch(0.16 0.006 250);
+  --surface-2: oklch(0.19 0.007 250);
+  --surface-3: oklch(0.23 0.008 250);
+
+  /* --- Primary: ciel bleu (dark-mode-tuned sky) --- */
+  --primary: oklch(0.72 0.16 240);
+  --primary-foreground: oklch(0.13 0.006 250);
+  --primary-soft: oklch(0.26 0.06 240);
+
+  /* --- Secondary: neutral surface --- */
+  --secondary: oklch(0.19 0.007 250);
+  --secondary-foreground: oklch(0.97 0.003 240);
+
+  /* --- Muted / fg hierarchy --- */
+  --muted: oklch(0.19 0.007 250);
+  --muted-foreground: oklch(0.68 0.01 240);
+  --fg-subtle: oklch(0.5 0.008 240);
+
+  /* --- Accent: hover surface --- */
+  --accent: oklch(0.23 0.008 250);
+  --accent-foreground: oklch(0.97 0.003 240);
+
+  /* --- Destructive --- */
+  --destructive: oklch(0.65 0.2 25);
+  --destructive-foreground: oklch(0.99 0 0);
+
+  /* --- Semantic status ramp (dark-tuned) --- */
+  --success: oklch(0.68 0.16 150);
+  --success-foreground: oklch(0.13 0.006 250);
+  --warning: oklch(0.78 0.15 75);
+  --warning-foreground: oklch(0.13 0.006 250);
+  --info: oklch(0.72 0.16 240); /* ciel bleu — matches primary */
+  --info-foreground: oklch(0.13 0.006 250);
+
+  /* --- Borders (lifted so they read against the new bg) --- */
+  --border: oklch(0.32 0.009 250);
+  --border-strong: oklch(0.42 0.012 250);
+  --input: oklch(0.24 0.008 250);
+  --ring: oklch(0.72 0.16 240);
+
+  /* --- Charts: sky-led palette, dark-tuned --- */
+  --chart-1: oklch(0.72 0.16 240); /* primary sky */
+  --chart-2: oklch(0.68 0.18 270); /* indigo bloom edge */
+  --chart-3: oklch(0.75 0.16 195); /* cyan/teal */
+  --chart-4: oklch(0.78 0.15 75); /* warm amber */
+  --chart-5: oklch(0.65 0.22 25); /* danger red */
+
+  /* Lyra: boxy + sharp. */
+  --radius: 0.125rem;
+
+  --sidebar: oklch(0.11 0.006 250); /* one notch deeper than bg to anchor */
+  --sidebar-foreground: oklch(0.97 0.003 240);
+  --sidebar-primary: oklch(0.72 0.16 240);
+  --sidebar-primary-foreground: oklch(0.13 0.006 250);
+  --sidebar-accent: oklch(0.23 0.008 250);
+  --sidebar-accent-foreground: oklch(0.97 0.003 240);
+  --sidebar-border: oklch(0.26 0.008 250);
+  --sidebar-ring: oklch(0.72 0.16 240);
+
+  /* Terminal inline blocks (dark mode — authentic ANSI palette) */
+  --terminal-bg: oklch(0.1 0.005 250);
+  --terminal-fg: oklch(0.92 0.004 240);
+  --terminal-border: oklch(0.28 0.008 250);
+  --terminal-green: #4ade80;
+  --terminal-red: #f87171;
+  --terminal-yellow: #fbbf24;
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+
+  /* Branded text selection — ciel-bleu primary at 72% (Lyra: one accent only).
+     Steal-and-refine from Suna's globals.css; Crossnode had browser-default. */
+  ::selection {
+    background: color-mix(in oklch, var(--primary) 72%, transparent);
+    color: var(--primary-foreground);
+  }
+  ::-moz-selection {
+    background: color-mix(in oklch, var(--primary) 72%, transparent);
+    color: var(--primary-foreground);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    zoom: 100%;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    /* Roobert stylistic sets — flip on the designed alternate glyphs (single-
+       story a, refined g/l/t, etc.) so the type reads intentional, not default.
+       Same font Suna uses; they enable these, we previously did not. `palt`
+       tightens CJK spacing. */
+    font-feature-settings:
+      "ss10" on,
+      "ss09" on,
+      "ss03" on,
+      "ss04" on,
+      "ss14" on,
+      "palt";
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-feature-settings:
+      "ss10" on,
+      "ss09" on,
+      "ss03" on,
+      "ss04" on,
+      "ss14" on,
+      "palt";
+    /* Adjusts spacing for CJK text */
+  }
+
+  /* Add font fallbacks for CJK characters */
+  .cjk-text,
+  .prose p,
+  .prose li,
+  .prose table td,
+  .prose table th,
+  .markdown-content {
+    font-family:
+      var(--font-sans),
+      ui-sans-serif,
+      -apple-system,
+      "Segoe UI",
+      "Helvetica Neue",
+      "Noto Sans",
+      "Noto Sans CJK JP",
+      "Noto Sans CJK KR",
+      "Noto Sans CJK SC",
+      "Noto Sans CJK TC",
+      sans-serif;
+    line-height: 1.7;
+  }
+
+  /* Chakra Petch — display/accent font for eyebrows, step numbers, section labels */
+  .font-display {
+    font-family: var(--font-display), ui-sans-serif, sans-serif;
+  }
+
+  /* Specific handling for monospace/code with CJK character support */
+  code,
+  pre,
+  .font-mono {
+    font-family:
+      var(--font-mono), ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco,
+      Consolas, "Liberation Mono", "Courier New", monospace,
+      "Noto Sans Mono CJK JP", "Noto Sans Mono CJK KR", "Noto Sans Mono CJK SC",
+      "Noto Sans Mono CJK TC";
+  }
+}
+
+/* Custom styles for Markdown chat content */
+.prose.chat-markdown {
+  /* Ensure reasonable spacing */
+  & > * + * {
+    margin-top: 0.75em;
+  }
+
+  /* Fix headings to be more compact in chat context */
+  & h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-top: 1em;
+    margin-bottom: 0.5em;
+    line-height: 1.2;
+  }
+
+  & h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-top: 0.8em;
+    margin-bottom: 0.4em;
+    line-height: 1.3;
+  }
+
+  & h3 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin-top: 0.6em;
+    margin-bottom: 0.3em;
+  }
+
+  & h4,
+  & h5,
+  & h6 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-top: 0.5em;
+    margin-bottom: 0.25em;
+  }
+
+  /* Improve lists */
+  & ul,
+  & ol {
+    padding-left: 1.5em;
+    margin-top: 0.5em;
+    margin-bottom: 0.5em;
+    list-style-position: outside;
+  }
+
+  & ul {
+    list-style-type: disc !important;
+  }
+
+  & ol {
+    list-style-type: decimal !important;
+  }
+
+  & li {
+    margin-top: 0.25em;
+    margin-bottom: 0.25em;
+    display: list-item !important;
+    list-style-position: outside !important;
+  }
+
+  & li > ul,
+  & li > ol {
+    margin-top: 0.25em;
+    margin-bottom: 0.25em;
+  }
+
+  /* Force numbered lists to show numbers */
+  & ol > li {
+    list-style-type: decimal !important;
+    display: list-item !important;
+  }
+
+  /* Enhanced link styling */
+  & a {
+    @apply text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 transition-colors duration-200;
+    text-decoration: underline;
+    text-underline-offset: 3px;
+    text-decoration-thickness: 1px;
+
+    &:hover {
+      text-decoration-thickness: 2px;
+    }
+
+    /* External link indicator */
+    &[target="_blank"]:after {
+      content: " ↗";
+      font-size: 0.8em;
+      opacity: 0.7;
+      margin-left: 2px;
+    }
+  }
+
+  /* Fix tables */
+  & table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 0.75em;
+    margin-bottom: 0.75em;
+    font-size: 0.9em;
+  }
+
+  & th {
+    background-color: theme("colors.slate.100");
+    font-weight: 600;
+    text-align: left;
+    padding: 0.5em 0.75em;
+  }
+
+  & td {
+    padding: 0.5em 0.75em;
+    border: 1px solid theme("colors.slate.200");
+  }
+
+  /* --- AWESOME DARK THEME OVERRIDE --- */
+  .dark & {
+    /* Code blocks in dark mode */
+    & pre {
+      background-color: hsl(var(--card));
+      border: 1px solid hsl(var(--border));
+    }
+
+    & code:not([class*="language-"]) {
+      background-color: hsl(var(--muted));
+      color: hsl(var(--muted-foreground));
+      border: 1px solid hsl(var(--border));
+    }
+
+    /* Tables in dark mode */
+    & th {
+      background-color: hsl(var(--muted));
+      border-color: hsl(var(--border));
+    }
+
+    & td {
+      border-color: hsl(var(--border));
+    }
+
+    /* Blockquotes in dark mode */
+    & blockquote {
+      border-left-color: hsl(var(--border));
+      color: hsl(var(--muted-foreground));
+    }
+
+    /* Links in dark mode */
+    & a {
+      @apply text-primary hover:text-primary/80;
+    }
+  }
+}
+
+.bg-pattern-grid {
+  background-image:
+    linear-gradient(to right, rgba(0, 0, 0, 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.dark .bg-pattern-grid {
+  background-image:
+    linear-gradient(to right, oklch(1 0 0 / 0.05) 1px, transparent 1px),
+    linear-gradient(to bottom, oklch(1 0 0 / 0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.bg-checker-pattern {
+  background-image:
+    linear-gradient(45deg, #f3f4f6 25%, transparent 25%),
+    linear-gradient(-45deg, #f3f4f6 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, #f3f4f6 75%),
+    linear-gradient(-45deg, transparent 75%, #f3f4f6 75%);
+  background-size: 20px 20px;
+  background-position:
+    0 0,
+    0 10px,
+    10px -10px,
+    -10px 0px;
+  background-color: #ffffff;
+}
+
+.dark .bg-checker-pattern-dark {
+  background-image:
+    linear-gradient(45deg, oklch(0.25 0.02 250 / 0.7) 25%, transparent 25%),
+    linear-gradient(-45deg, oklch(0.25 0.02 250 / 0.7) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, oklch(0.25 0.02 250 / 0.7) 75%),
+    linear-gradient(-45deg, transparent 75%, oklch(0.25 0.02 250 / 0.7) 75%);
+  background-size: 20px 20px;
+  background-position:
+    0 0,
+    0 10px,
+    10px -10px,
+    -10px 0px;
+  background-color: oklch(0.14 0.02 250 / 0.7);
+}
+
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(200%);
+  }
+}
+
+@keyframes gradient-shift {
+  0% {
+    background-position: 0% 50%;
+  }
+
+  50% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+@theme {
+  --animate-shimmer: shimmer 1s infinite;
+  --animate-gradient-shift: gradient-shift 2s ease infinite;
+}
+
+.animate-shimmer {
+  @apply relative overflow-hidden rounded-md;
+  @apply bg-gradient-to-r from-primary/20 via-primary/10 to-primary/20;
+  background-size: 200% 200%;
+  animation: var(--animate-gradient-shift);
+}
+
+.animate-shimmer::before {
+  content: "";
+  @apply absolute top-0 left-0 w-full h-full;
+  background: linear-gradient(
+    140deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: var(--animate-shimmer);
+  width: 100%;
+  transform: translateX(-100%);
+}
+
+.animate-shimmer-gray {
+  @apply relative overflow-hidden rounded-md;
+  @apply bg-gradient-to-r from-muted via-muted/50 to-muted;
+  background-size: 200% 200%;
+  animation: var(--animate-gradient-shift);
+}
+
+.animate-shimmer-gray::before {
+  content: "";
+  @apply absolute top-0 left-0 w-full h-full;
+  background: linear-gradient(
+    140deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.6) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  animation: var(--animate-shimmer);
+  width: 100%;
+  transform: translateX(-100%);
+}
+
+@theme inline {
+  --animate-shiny-text: shiny-text 5s infinite;
+
+  @keyframes shiny-text {
+    0%,
+    90%,
+    100% {
+      background-position: calc(-100% - var(--shiny-width)) 0;
+    }
+
+    30%,
+    60% {
+      background-position: calc(100% + var(--shiny-width)) 0;
+    }
+  }
+}
+
+.react-colorful {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.react-colorful__saturation {
+  position: relative !important;
+  flex-grow: 1 !important;
+  border-radius: 8px 8px 0 0 !important;
+  border-bottom: none !important;
+  overflow: hidden !important;
+  min-height: 150px !important;
+}
+
+.react-colorful__hue {
+  position: relative !important;
+  height: 20px !important;
+  border-radius: 0 0 8px 8px !important;
+}
+
+.react-colorful__saturation-pointer,
+.react-colorful__hue-pointer {
+  width: 20px !important;
+  height: 20px !important;
+  border: 2px solid white !important;
+  box-shadow:
+    0 2px 4px rgba(0, 0, 0, 0.2),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.1) !important;
+}
+
+.react-colorful__interactive:focus .react-colorful__pointer {
+  transform: scale(1.1);
+}
+
+.tiptap {
+  :first-child {
+    margin-top: 0;
+  }
+
+  ul,
+  ol {
+    padding: 0 1rem;
+    margin: 1.25rem 1rem 1.25rem 0.4rem;
+  }
+
+  ul li {
+    list-style-type: disc;
+
+    p {
+      margin-top: 0.25em;
+      margin-bottom: 0.25em;
+    }
+  }
+
+  ol li {
+    list-style-type: decimal;
+
+    p {
+      margin-top: 0.25em;
+      margin-bottom: 0.25em;
+    }
+  }
+
+  ul[data-type="taskList"] {
+    list-style: none;
+    margin-left: 0;
+    padding: 0;
+
+    li {
+      align-items: flex-start;
+      display: flex;
+
+      > label {
+        flex: 0 0 auto;
+        margin-right: 0.5rem;
+        user-select: none;
+      }
+
+      > div {
+        flex: 1 1 auto;
+      }
+    }
+
+    input[type="checkbox"] {
+      cursor: pointer;
+    }
+
+    ul[data-type="taskList"] {
+      margin: 0;
+    }
+  }
+
+  blockquote {
+    border-left: 3px solid theme("colors.gray.300");
+    margin: 1.5rem 0;
+    padding-left: 1rem;
+  }
+
+  pre {
+    background: theme("colors.black");
+    border-radius: 0.5rem;
+    color: theme("colors.white");
+    font-family: "JetBrainsMono", monospace;
+    margin: 1.5rem 0;
+    padding: 0.75rem 1rem;
+
+    code {
+      background: none;
+      color: inherit;
+      font-size: 0.8rem;
+      padding: 0;
+    }
+  }
+
+  /* Details */
+  .details {
+    display: flex;
+    gap: 0.25rem;
+    margin: 1.5rem 0;
+    border: 1px solid theme("colors.gray.300");
+    border-radius: 0.5rem;
+    padding: 0.5rem;
+
+    summary {
+      font-weight: 700;
+    }
+
+    > button {
+      align-items: center;
+      background: transparent;
+      border-radius: 4px;
+      display: flex;
+      font-size: 0.625rem;
+      height: 1.25rem;
+      justify-content: center;
+      line-height: 1;
+      margin-top: 0.1rem;
+      padding: 0;
+      width: 1.25rem;
+
+      &:hover {
+        background-color: theme("colors.gray.300");
+      }
+
+      &::before {
+        content: "\25B6";
+      }
+    }
+
+    &.is-open > button::before {
+      transform: rotate(90deg);
+    }
+
+    > div {
+      display: flex;
+      flex-direction: column;
+      gap: 1rem;
+      width: 100%;
+
+      > [data-type="detailsContent"] > :last-child {
+        margin-bottom: 0.5rem;
+      }
+    }
+
+    .details {
+      margin: 0.5rem 0;
+    }
+  }
+
+  /* Heading styles */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    line-height: 1.1;
+    margin-top: 2.5rem;
+    text-wrap: pretty;
+  }
+
+  h1,
+  h2 {
+    margin-top: 3.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  h1 {
+    font-size: 1.4rem;
+  }
+
+  h2 {
+    font-size: 1.2rem;
+  }
+
+  h3 {
+    font-size: 1.1rem;
+  }
+
+  h4,
+  h5,
+  h6 {
+    font-size: 1rem;
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid theme("colors.gray.200");
+    cursor: pointer;
+    margin: 2rem 0;
+
+    &.ProseMirror-selectednode {
+      border-top: 1px solid theme("colors.purple.500");
+    }
+  }
+
+  img {
+    display: block;
+    height: auto;
+    margin: 1.5rem 0;
+    max-width: 100%;
+
+    &.ProseMirror-selectednode {
+      outline: 3px solid theme("colors.purple.500");
+    }
+  }
+
+  /* Table-specific styling */
+  table {
+    border-collapse: collapse;
+    margin: 0;
+    overflow: hidden;
+    table-layout: fixed;
+    width: 100%;
+
+    td,
+    th {
+      border: 1px solid theme("colors.gray.300");
+      box-sizing: border-box;
+      min-width: 1em;
+      padding: 6px 8px;
+      position: relative;
+      vertical-align: top;
+
+      > * {
+        margin-bottom: 0;
+      }
+    }
+
+    th {
+      background-color: theme("colors.gray.100");
+      font-weight: bold;
+      text-align: left;
+    }
+
+    .selectedCell:after {
+      background: theme("colors.gray.200");
+      content: "";
+      left: 0;
+      right: 0;
+      top: 0;
+      bottom: 0;
+      pointer-events: none;
+      position: absolute;
+      z-index: 2;
+    }
+
+    .column-resize-handle {
+      background-color: theme("colors.purple.500");
+      bottom: -2px;
+      pointer-events: none;
+      position: absolute;
+      right: -2px;
+      top: 0;
+      width: 4px;
+    }
+  }
+
+  .tableWrapper {
+    margin: 1.5rem 0;
+    overflow-x: auto;
+  }
+
+  &.resize-cursor {
+    cursor: ew-resize;
+    cursor: col-resize;
+  }
+
+  mark {
+    background-color: #faf594;
+    border-radius: 0.4rem;
+    box-decoration-break: clone;
+    padding: 0.1rem 0.3rem;
+  }
+
+  div[data-youtube-video] {
+    cursor: move;
+    padding-right: 1.5rem;
+
+    iframe {
+      border: 0.5rem solid var(--black-contrast);
+      display: block;
+      min-height: 200px;
+      min-width: 200px;
+      outline: 0px solid transparent;
+    }
+
+    &.ProseMirror-selectednode iframe {
+      outline: 3px solid var(--purple);
+      transition: outline 0.15s;
+    }
+  }
+}
+
+@keyframes scroll-x {
+  from {
+    transform: translateX(0);
+  }
+
+  to {
+    transform: translateX(-50%);
+  }
+}
+
+@keyframes edge-flow {
+  from {
+    stroke-dashoffset: 20;
+  }
+
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.animate-edge-flow {
+  animation: edge-flow 1s linear infinite;
+}
+
+.font-data {
+  font-family: "JetBrains Mono", "Fira Code", monospace;
+  letter-spacing: -0.02em;
+  font-size: 0.85em;
+  /* Monospace often looks larger, visually adjust */
+}
+
+/* Terminal/Console Color Palette for Activity Display */
+.terminal-text {
+  font-family: var(--font-mono);
+  letter-spacing: -0.02em;
+}
+
+.terminal-success {
+  color: #4ade80;
+}
+.terminal-error {
+  color: #f87171;
+}
+.terminal-warning {
+  color: #fbbf24;
+}
+.terminal-info {
+  color: #60a5fa;
+}
+.terminal-highlight {
+  color: #22d3ee;
+}
+.terminal-dim {
+  color: oklch(0.55 0.008 240);
+}
+
+/* Pulsing indicator for live updates */
+@keyframes terminal-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.terminal-pulse {
+  animation: terminal-pulse 1.5s ease-in-out infinite;
+}
+
+/* Custom scrollbar for terminal thinking content */
+.scrollbar-thin::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.scrollbar-thin::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb {
+  @apply bg-muted rounded-full;
+}
+
+.scrollbar-thin::-webkit-scrollbar-thumb:hover {
+  @apply bg-muted-foreground/40;
+}
+
+/* Animated gradient background */
+.animate-gradient-shift {
+  animation: gradient-shift 3s ease infinite;
+  background-size: 200% 200%;
+}
+
+/* Cinematic zoom effect for build dialogs */
+@keyframes cinematic-zoom-out {
+  0% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+
+  20% {
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+.animate-cinematic-zoom {
+  animation: cinematic-zoom-out 1.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Floating glow effect */
+@keyframes floating-glow {
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(99, 102, 241, 0.3);
+  }
+
+  50% {
+    box-shadow: 0 0 40px rgba(99, 102, 241, 0.6);
+  }
+}
+
+.animate-floating-glow {
+  animation: floating-glow 3s ease-in-out infinite;
+}
+
+/* Node pop-in effect */
+@keyframes node-pop-in {
+  0% {
+    transform: scale(0) rotate(-10deg);
+    opacity: 0;
+  }
+
+  60% {
+    transform: scale(1.1) rotate(2deg);
+  }
+
+  100% {
+    transform: scale(1) rotate(0deg);
+    opacity: 1;
+  }
+}
+
+.animate-node-pop-in {
+  animation: node-pop-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* Subtle breathing effect */
+@keyframes breathing {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+
+  50% {
+    transform: scale(1.02);
+  }
+}
+
+.animate-breathing {
+  animation: breathing 4s ease-in-out infinite;
+}
+
+/* =============================================================================
+   STREAMING WORD ANIMATION
+   Apply .animate-stream-word to each word span during LLM token streaming.
+   Words appear with a blue blur that resolves to normal text in 0.6s.
+   ============================================================================= */
+
+@keyframes stream-blue-blur {
+  0% {
+    filter: blur(4px);
+    color: oklch(0.623 0.214 259.815);
+    opacity: 0.6;
+  }
+
+  100% {
+    filter: blur(0);
+    color: inherit;
+    opacity: 1;
+  }
+}
+
+.animate-stream-word {
+  animation: stream-blue-blur 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+  display: inline;
+  will-change: filter, color, opacity;
+}
+
+/* Fade-in variant for full blocks (paragraphs, headings) during streaming */
+@keyframes stream-block-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+    filter: blur(2px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+    filter: blur(0);
+  }
+}
+
+.animate-stream-block {
+  animation: stream-block-in 0.25s ease-out forwards;
+}
+
+/* Streaming text shimmer for inline "thinking…" placeholders */
+.animate-shimmer-text {
+  background: linear-gradient(
+    -65deg,
+    var(--muted-foreground) 0%,
+    var(--foreground) 50%,
+    var(--muted-foreground) 100%
+  );
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shimmer-text 800ms linear infinite;
+}
+
+@keyframes shimmer-text {
+  0% {
+    background-position: 100% 50%;
+  }
+
+  100% {
+    background-position: -100% 50%;
+  }
+}
+
+/* =============================================================================
+   DASHBOARD ATMOSPHERE (approved bloom/pixel motion — DESIGN.md exception)
+   The signature ciel-bleu bloom, animated: a gentle rise on load, a pixel
+   intro that dissolves, and a wave that blooms out of the composer on submit.
+   ============================================================================= */
+
+/* Bloom gently rises + settles when the dashboard mounts. */
+@keyframes cn-bloom-rise {
+  from {
+    opacity: 0;
+    transform: translateY(24px) scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.cn-bloom-rise {
+  animation: cn-bloom-rise 900ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+/* One-shot pixel intro overlay: holds briefly, then dissolves upward. */
+@keyframes cn-intro-out {
+  0%,
+  55% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+    visibility: hidden;
+  }
+}
+.cn-intro {
+  animation: cn-intro-out 1500ms ease-out forwards;
+}
+
+/* Submit wave: a primary-blue radial blooms out of the composer, then fades. */
+/* Submit fill: a ciel-bleu (primary) ellipse blooms from the composer's center
+   and, at full scale, is inscribed in the box — touching the left/right and
+   top/bottom edges at the same instant — then fades. `inset:0` + border-radius
+   50% makes the ellipse track the input's exact proportions. Primary only. */
+@keyframes cn-bloom-wave {
+  0% {
+    opacity: 0;
+    transform: scale(0.25);
+  }
+  35% {
+    opacity: 0.55;
+  }
+  60% {
+    opacity: 0.5;
+    transform: scale(1.4);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1.75);
+  }
+}
+/* Submit flood: a ciel-bleu bloom from the centre that overscales to fill the
+   whole composer (corners included), then fades. The gradient is an
+   aspect-matched ellipse (70% of each axis) so it reaches the horizontal and
+   vertical edges together; `border-radius: inherit` + the parent's
+   overflow-hidden clip it to the input's rounded shape. */
+.cn-bloom-wave {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  transform-origin: center;
+  background: radial-gradient(
+    ellipse 70% 70% at center,
+    var(--primary) 0%,
+    color-mix(in oklch, var(--primary) 70%, transparent) 55%,
+    transparent 100%
+  );
+  animation: cn-bloom-wave 700ms cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Staggered prompt insert — suggestions fade up one-by-one with a brief
+   ciel-bleu accent when the domain changes. `backwards` so the resting style
+   reverts to the element's own classes (no lingering shadow). */
+@keyframes cn-prompt-in {
+  0% {
+    opacity: 0;
+    transform: translateY(6px);
+    box-shadow: inset 2px 0 0 transparent;
+  }
+  55% {
+    opacity: 1;
+    box-shadow: inset 2px 0 0 var(--primary);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+    box-shadow: inset 0 0 0 transparent;
+  }
+}
+.cn-prompt-in {
+  animation: cn-prompt-in 460ms cubic-bezier(0.16, 1, 0.3, 1) backwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cn-bloom-rise,
+  .cn-intro,
+  .cn-bloom-wave,
+  .cn-prompt-in {
+    animation: none;
+  }
+  .cn-intro {
+    display: none;
+  }
+}
+
+/* =============================================================================
+   SCROLLBAR MINIMAL
+   Invisible scrollbar that fades in only on hover. Apply to panels/sidebars.
+   ============================================================================= */
+
+.scrollbar-minimal {
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+  transition: scrollbar-color 0.2s ease;
+}
+
+.scrollbar-minimal:hover {
+  scrollbar-color: oklch(0.5 0 0 / 0.2) transparent;
+}
+
+.scrollbar-minimal::-webkit-scrollbar {
+  width: 4px;
+  height: 4px;
+}
+
+.scrollbar-minimal::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.scrollbar-minimal::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 2px;
+  transition: background 0.2s ease;
+}
+
+.scrollbar-minimal:hover::-webkit-scrollbar-thumb {
+  background: oklch(0.5 0 0 / 0.2);
+}
+
+.dark .scrollbar-minimal:hover::-webkit-scrollbar-thumb {
+  background: oklch(0.7 0 0 / 0.25);
+}
+
+/* =============================================================================
+   PULSE HEARTBEAT
+   Use on icons/logos next to "Reasoning…" / "Thinking…" labels.
+   animate-pulse-heartbeat: scales between 1x and 1.15x
+   animate-text-shimmer: opacity breathes for the label text
+   ============================================================================= */
+
+@keyframes pulse-heartbeat {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+
+  50% {
+    transform: scale(1.15);
+    opacity: 0.8;
+  }
+}
+
+.animate-pulse-heartbeat {
+  animation: pulse-heartbeat 1.2s ease-in-out infinite;
+}
+
+@keyframes text-shimmer-breath {
+  0%,
+  100% {
+    opacity: 0.65;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+.animate-text-shimmer {
+  animation: text-shimmer-breath 1.2s ease-in-out infinite;
+}
+
+/* Hide Crisp launcher bubble on pages where chat is disabled */
+body[data-crisp-hide] .crisp-client,
+body[data-crisp-hide] #crisp-chatbox {
+  display: none !important;
+}
+
+/* Crisp ships an inline z-index of ~1 billion on its launcher, which sat on TOP
+   of the cookie-consent banner (no Tailwind z-[...] could win an inline 1e9).
+   Cap it below the banner (z-[1000001]) so consent is always reachable. !important
+   beats Crisp's inline style; this stays well above ordinary page UI. */
+.crisp-client {
+  z-index: 999990 !important;
+}
+
+/* Wide dialog override - avoids Turbopack/Lightning-CSS failures from
+   Tailwind v4 arbitrary important selectors like !max-w-[96vw] */
+.dialog-wide {
+  max-width: 96vw !important;
+  width: 96vw !important;
+}
+
+/* ── ReactFlow Builder Canvas Polish ── */
+.react-flow__selection {
+  background: hsl(var(--primary) / 0.04);
+  border: 1.5px solid hsl(var(--primary) / 0.25);
+  border-radius: 8px;
+}
+
+.react-flow__controls {
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.react-flow__controls button {
+  background: transparent;
+  border-bottom: 1px solid hsl(var(--border) / 0.5);
+  color: hsl(var(--foreground));
+  transition: background 0.15s ease;
+}
+
+.react-flow__controls button:hover {
+  background: hsl(var(--muted));
+}
+
+.react-flow__controls button:active {
+  background: hsl(var(--muted-foreground) / 0.15);
+}
+
+.react-flow__controls svg {
+  fill: currentColor;
+}
+
+.react-flow__attribution {
+  display: none;
+}
+
+/* ============================================================================
+   CrossNode Design System — Utilities
+   See /DESIGN.md. Use these instead of ad-hoc styles for consistency.
+   ============================================================================ */
+
+/* Signature eyebrow — paired with every page title */
+.eyebrow {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: hsl(var(--muted-foreground));
+  line-height: 1.2;
+}
+
+/* Tabular numerics — every number in the product gets this */
+.data,
+.tabular {
+  font-feature-settings:
+    "tnum" 1,
+    "lnum" 1;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.01em;
+}
+
+/* Display-tight tracking for hero/page titles */
+.tracking-display {
+  letter-spacing: -0.025em;
+}
+
+/* Motion language — the four allowed animations */
+@keyframes cn-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cn-exit {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+.cn-enter {
+  animation: cn-enter var(--duration-moderate) var(--ease-cn-enter) both;
+}
+
+.cn-exit {
+  animation: cn-exit var(--duration-normal) var(--ease-cn-exit) both;
+}
+
+/* Hover transition — color only, fast */
+.cn-hover {
+  transition:
+    color var(--duration-fast) linear,
+    background-color var(--duration-fast) linear,
+    border-color var(--duration-fast) linear;
+}
+
+/* Storefront preview pulse — used after auto-scrolling to a section the AI
+   just edited. The fade signals "this is what changed" without blocking
+   interaction. Single keyframe so it doesn't replay if applied twice. */
+@keyframes cn-preview-pulse {
+  0% {
+    box-shadow: 0 0 0 2px oklch(0.65 0.16 240 / 0.6) inset;
+    background-color: oklch(0.65 0.16 240 / 0.04);
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent inset;
+    background-color: transparent;
+  }
+}
+.cn-preview-pulse {
+  animation: cn-preview-pulse 1.2s ease-out;
+}
+
+/* Pixel-matrix loader — staggered per-dot reveal for PixelText */
+@keyframes cn-pixel-reveal {
+  0% {
+    opacity: 0;
+    transform: scale(0.35);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes cn-pixel-cycle {
+  0% {
+    opacity: 0;
+    transform: scale(0.35);
+  }
+  14% {
+    opacity: 1;
+    transform: scale(1.25);
+  }
+  22% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  72% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  90% {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.35);
+  }
+}
+
+/* Sequential mode — single character builds, holds briefly, fades out */
+@keyframes cn-pixel-char {
+  0% {
+    opacity: 0;
+    transform: scale(0.35);
+  }
+  35% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
+  45% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  75% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  95% {
+    opacity: 0;
+    transform: scale(0.7);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+}
+
+/* Soft pulse for inline thinking dots — sequential row of 3-5 dots that fade
+   in/out with a small breathing window. Intentionally subtle: this fires
+   continuously while the agent reasons, so volume matters more than amplitude. */
+@keyframes cn-pixel-thinking {
+  0%,
+  100% {
+    opacity: 0.15;
+    transform: scale(0.85);
+  }
+  40% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  60% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* Ring-walk for the spinner — 8 dots fire in clockwise sequence. Slower than
+   conventional CSS spinners so the room reads "deliberate" rather than "busy". */
+@keyframes cn-pixel-spinner {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [style*="cn-pixel-cycle"],
+  [style*="cn-pixel-reveal"],
+  [style*="cn-pixel-char"],
+  [style*="cn-pixel-thinking"],
+  [style*="cn-pixel-spinner"] {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+}
+
+/* =============================================================================
+   HIT AREA — expand interactive targets without layout shift
+   Adapted from bazza.dev/craft. Apply `hit-area-2` to a small icon button to
+   give it an invisible 8px (2 × 4px) larger click zone in every direction; the
+   ::before grows the pointer target while the element's box stays put. Use
+   hit-area-x-* / -y-* / -t/r/b/l-* for one-axis or one-side expansion.
+   ============================================================================= */
+
+@utility hit-area-* {
+  position: relative;
+  --hit-area-t: --spacing(--value(number) * -1);
+  --hit-area-t: calc(--value([*]) * -1);
+  --hit-area-b: --spacing(--value(number) * -1);
+  --hit-area-b: calc(--value([*]) * -1);
+  --hit-area-l: --spacing(--value(number) * -1);
+  --hit-area-l: calc(--value([*]) * -1);
+  --hit-area-r: --spacing(--value(number) * -1);
+  --hit-area-r: calc(--value([*]) * -1);
+  &::before {
+    content: "";
+    position: absolute;
+    top: var(--hit-area-t, 0px);
+    right: var(--hit-area-r, 0px);
+    bottom: var(--hit-area-b, 0px);
+    left: var(--hit-area-l, 0px);
+    pointer-events: inherit;
+  }
+}
+
+@utility hit-area-x-* {
+  position: relative;
+  --hit-area-l: --spacing(--value(number) * -1);
+  --hit-area-l: calc(--value([*]) * -1);
+  --hit-area-r: --spacing(--value(number) * -1);
+  --hit-area-r: calc(--value([*]) * -1);
+  &::before {
+    content: "";
+    position: absolute;
+    top: var(--hit-area-t, 0px);
+    right: var(--hit-area-r, 0px);
+    bottom: var(--hit-area-b, 0px);
+    left: var(--hit-area-l, 0px);
+    pointer-events: inherit;
+  }
+}
+
+@utility hit-area-y-* {
+  position: relative;
+  --hit-area-t: --spacing(--value(number) * -1);
+  --hit-area-t: calc(--value([*]) * -1);
+  --hit-area-b: --spacing(--value(number) * -1);
+  --hit-area-b: calc(--value([*]) * -1);
+  &::before {
+    content: "";
+    position: absolute;
+    top: var(--hit-area-t, 0px);
+    right: var(--hit-area-r, 0px);
+    bottom: var(--hit-area-b, 0px);
+    left: var(--hit-area-l, 0px);
+    pointer-events: inherit;
+  }
+}
+
+/* =============================================================================
+   VIEW TRANSITIONS — native-app route change
+   A brief blur that sharpens on navigation. Cheap perceived-quality lift; the
+   crossfade is suppressed so only the focus-pull reads. Respects reduced motion.
+   ============================================================================= */
+
+/* Opt into cross-document view transitions for same-origin navigations.
+   Progressive enhancement: no-ops in browsers without support and on Next.js
+   soft client-nav (a follow-up can wire next's <ViewTransition> for those). */
+@view-transition {
+  navigation: auto;
+}
+
+::view-transition-old(root),
+::view-transition-new(root) {
+  animation: none;
+  mix-blend-mode: normal;
+}
+
+::view-transition-new(root) {
+  filter: blur(12px);
+  animation: cn-view-sharpen 320ms ease-in-out forwards;
+}
+
+@keyframes cn-view-sharpen {
+  0% {
+    filter: blur(12px);
+  }
+  60% {
+    filter: blur(4px);
+  }
+  100% {
+    filter: blur(0px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  ::view-transition-new(root) {
+    animation: none;
+    filter: none;
+  }
+}

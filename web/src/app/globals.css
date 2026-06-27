@@ -1,0 +1,329 @@
+/* AgentReady — Lyra Design System CSS */
+@import url("https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap");
+@import url("https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================================================
+   DESIGN TOKENS — Light Mode (Lyra)
+   Ciel bleu primary: oklch(0.65 0.16 240)
+   ============================================================================ */
+
+:root,
+.light {
+  /* Base surfaces */
+  --background: oklch(0.985 0.004 235);
+  --foreground: oklch(0.2 0.025 245);
+
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.2 0.025 245);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.2 0.025 245);
+
+  /* Surface elevation (no box-shadows — use these instead) */
+  --surface-1: oklch(1 0 0);
+  --surface-2: oklch(0.97 0.008 235);
+  --surface-3: oklch(0.94 0.012 235);
+
+  /* Primary: ciel bleu */
+  --primary: oklch(0.65 0.16 240);
+  --primary-foreground: oklch(0.99 0 0);
+  --primary-soft: oklch(0.95 0.04 240);
+
+  /* Secondary */
+  --secondary: oklch(0.97 0.008 235);
+  --secondary-foreground: oklch(0.2 0.025 245);
+
+  /* Muted / fg hierarchy */
+  --muted: oklch(0.97 0.008 235);
+  --muted-foreground: oklch(0.5 0.02 245);
+  --fg-subtle: oklch(0.65 0.012 245);
+
+  /* Accent: hover surface */
+  --accent: oklch(0.94 0.012 235);
+  --accent-foreground: oklch(0.2 0.025 245);
+
+  /* Destructive / danger */
+  --destructive: oklch(0.53 0.22 20);
+  --destructive-foreground: oklch(0.99 0 0);
+  --danger: oklch(0.53 0.22 20);
+
+  /* Semantic status */
+  --success: oklch(0.52 0.17 152);
+  --success-foreground: oklch(0.99 0 0);
+  --warning: oklch(0.68 0.18 62);
+  --warning-foreground: oklch(0.2 0.025 245);
+  --info: oklch(0.65 0.16 240);
+  --info-foreground: oklch(0.99 0 0);
+
+  /* Motion durations */
+  --duration-fast: 80ms;
+  --duration-normal: 120ms;
+  --duration-moderate: 200ms;
+
+  /* Easing */
+  --ease-cn-enter: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-cn-exit: cubic-bezier(0.7, 0, 0.84, 0);
+
+  /* Borders */
+  --border: oklch(0.92 0.008 235);
+  --border-strong: oklch(0.85 0.012 235);
+  --input: oklch(0.92 0.008 235);
+  --ring: oklch(0.65 0.16 240);
+
+  /* Lyra: boxy + sharp */
+  --radius: 0.125rem;
+
+  /* Terminal dark theme (always dark regardless of page mode) */
+  --t-bg: oklch(0.11 0.006 250);
+  --t-s1: oklch(0.15 0.007 250);
+  --t-border: oklch(0.26 0.008 250);
+  --t-fg: oklch(0.92 0.004 240);
+  --t-muted: oklch(0.55 0.01 240);
+  --t-green: #4ade80;
+  --t-red: #f87171;
+  --t-amber: #fbbf24;
+  --t-blue: #60a5fa;
+}
+
+.dark {
+  --background: oklch(0.13 0.006 250);
+  --foreground: oklch(0.97 0.003 240);
+
+  --card: oklch(0.16 0.006 250);
+  --card-foreground: oklch(0.97 0.003 240);
+  --popover: oklch(0.16 0.006 250);
+  --popover-foreground: oklch(0.97 0.003 240);
+
+  --surface-1: oklch(0.16 0.006 250);
+  --surface-2: oklch(0.19 0.007 250);
+  --surface-3: oklch(0.23 0.008 250);
+
+  --primary: oklch(0.72 0.16 240);
+  --primary-foreground: oklch(0.13 0.006 250);
+  --primary-soft: oklch(0.26 0.06 240);
+
+  --secondary: oklch(0.19 0.007 250);
+  --secondary-foreground: oklch(0.97 0.003 240);
+
+  --muted: oklch(0.19 0.007 250);
+  --muted-foreground: oklch(0.68 0.01 240);
+  --fg-subtle: oklch(0.5 0.008 240);
+
+  --accent: oklch(0.23 0.008 250);
+  --accent-foreground: oklch(0.97 0.003 240);
+
+  --destructive: oklch(0.65 0.2 25);
+  --destructive-foreground: oklch(0.99 0 0);
+  --danger: oklch(0.65 0.2 25);
+
+  --success: oklch(0.68 0.16 150);
+  --success-foreground: oklch(0.13 0.006 250);
+  --warning: oklch(0.78 0.15 75);
+  --warning-foreground: oklch(0.13 0.006 250);
+
+  --border: oklch(0.32 0.009 250);
+  --border-strong: oklch(0.42 0.012 250);
+  --input: oklch(0.24 0.008 250);
+  --ring: oklch(0.72 0.16 240);
+
+  --radius: 0.125rem;
+
+  --t-bg: oklch(0.08 0.005 250);
+  --t-s1: oklch(0.12 0.006 250);
+  --t-border: oklch(0.24 0.008 250);
+  --t-fg: oklch(0.92 0.004 240);
+  --t-muted: oklch(0.5 0.008 240);
+}
+
+/* ============================================================================
+   BASE LAYER
+   ============================================================================ */
+
+@layer base {
+  * {
+    border-color: var(--border);
+    box-sizing: border-box;
+  }
+
+  ::selection {
+    background: color-mix(in oklch, var(--primary) 72%, transparent);
+    color: var(--primary-foreground);
+  }
+
+  html {
+    scroll-behavior: smooth;
+    text-rendering: optimizeLegibility;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    background-color: var(--background);
+    color: var(--foreground);
+    font-family: "Inter", ui-sans-serif, system-ui, sans-serif;
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .font-display {
+    font-family: "Chakra Petch", sans-serif;
+  }
+
+  .font-mono,
+  code,
+  pre {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+  }
+}
+
+/* ============================================================================
+   COMPONENT LAYER
+   ============================================================================ */
+
+@layer components {
+  /* Eyebrow — 11px uppercase + 0.08em tracking, paired with every page title */
+  .eyebrow {
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+    line-height: 1.2;
+  }
+
+  /* Tabular numerics */
+  .data {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+    font-variant-numeric: tabular-nums lining-nums;
+    letter-spacing: -0.01em;
+  }
+
+  /* Surface elevation classes (no box-shadows) */
+  .surface-1 {
+    background-color: var(--surface-1);
+  }
+  .surface-2 {
+    background-color: var(--surface-2);
+  }
+  .surface-3 {
+    background-color: var(--surface-3);
+  }
+
+  /* Motion utilities */
+  .cn-enter {
+    animation: cn-enter var(--duration-moderate) var(--ease-cn-enter) both;
+  }
+  .cn-exit {
+    animation: cn-exit var(--duration-normal) var(--ease-cn-exit) both;
+  }
+  .cn-hover {
+    transition:
+      color var(--duration-fast) linear,
+      background-color var(--duration-fast) linear,
+      border-color var(--duration-fast) linear;
+  }
+
+  /* Minimal scrollbar — fades on hover */
+  .scrollbar-minimal {
+    scrollbar-width: thin;
+    scrollbar-color: transparent transparent;
+    transition: scrollbar-color 0.2s ease;
+  }
+  .scrollbar-minimal:hover {
+    scrollbar-color: oklch(0.5 0 0 / 0.2) transparent;
+  }
+  .scrollbar-minimal::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+  .scrollbar-minimal::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  .scrollbar-minimal::-webkit-scrollbar-thumb {
+    background: transparent;
+    border-radius: 2px;
+    transition: background 0.2s ease;
+  }
+  .scrollbar-minimal:hover::-webkit-scrollbar-thumb {
+    background: oklch(0.5 0 0 / 0.2);
+  }
+}
+
+/* ============================================================================
+   KEYFRAMES — the four sanctioned animations + spinner
+   ============================================================================ */
+
+@keyframes cn-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cn-exit {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes cn-hover {
+  from {
+    opacity: 0.8;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes spinner {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Terminal line blink */
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+
+/* Score number count-up fade */
+@keyframes score-in {
+  from {
+    opacity: 0;
+    transform: scale(0.85);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* ============================================================================
+   REDUCED MOTION
+   ============================================================================ */
+
+@media (prefers-reduced-motion: reduce) {
+  .cn-enter,
+  .cn-exit,
+  .cn-hover {
+    animation: none;
+    opacity: 1;
+    transform: none;
+  }
+}
