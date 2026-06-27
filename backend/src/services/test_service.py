@@ -318,11 +318,13 @@ async def run_single_audit(domain: str, agent_id: int, job_id: str) -> dict:
         return data
 
     except Exception as exc:
-        await emit(job_id, {"type": "line", "ok": False, "msg": f"error: {exc}"})
+        from ..agents.catts import clean_evidence
+        msg = clean_evidence(str(exc))
+        await emit(job_id, {"type": "line", "ok": False, "msg": f"error: {msg}"})
         return {
             "domain": domain,
             "dimensions": {
-                dim: {"passed": False, "confidence": 0.5, "evidence": str(exc)}
+                dim: {"passed": False, "confidence": 0.5, "evidence": msg}
                 for dim in DIMENSIONS
             },
         }

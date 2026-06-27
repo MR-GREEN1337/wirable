@@ -72,7 +72,11 @@ function reducer(state: State, ev: RunEvent): State {
     }
     case "classify":
       return { ...state, classify: { kind: ev.kind, evidence: ev.evidence } };
-    case "line":
+    case "line": {
+      // Visual dedup: collapse an identical line emitted back-to-back so a
+      // repeated error never stacks into a wall.
+      const prev = state.lines[state.lines.length - 1];
+      if (prev && prev.msg === ev.msg && prev.dim === ev.dim) return state;
       return {
         ...state,
         lines: [
@@ -80,6 +84,7 @@ function reducer(state: State, ev: RunEvent): State {
           { type: ev.ok ? "ok" : "err", msg: ev.msg, dim: ev.dim },
         ],
       };
+    }
     case "screenshot":
       if (state.shots.some((s) => s.seq === ev.seq)) return state;
       return {
@@ -148,6 +153,37 @@ function reducer(state: State, ev: RunEvent): State {
     default:
       return state;
   }
+}
+
+// ── Status pill ──────────────────────────────────────────────────────────────
+function StatusPill({
+  running,
+  finished,
+}: {
+  running: boolean;
+  finished: "done" | "error" | null;
+}) {
+  const [label, color, blink] =
+    finished === "error"
+      ? (["error", "var(--danger)", false] as const)
+      : finished === "done"
+        ? (["complete", "var(--success)", false] as const)
+        : (["running", "var(--primary)", true] as const);
+  return (
+    <span
+      className="data inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[10px] uppercase tracking-[0.08em]"
+      style={{ border: `1px solid ${color}`, color }}
+    >
+      <span
+        className="h-1.5 w-1.5 rounded-full"
+        style={{
+          background: color,
+          animation: blink ? "cursor-blink 1.2s ease-in-out infinite" : undefined,
+        }}
+      />
+      {label}
+    </span>
+  );
 }
 
 // ── Section wrapper ──────────────────────────────────────────────────────────
@@ -259,7 +295,7 @@ export function RunView({ runId, domain }: { runId: string; domain: string }) {
           borderColor: "var(--border)",
         }}
       >
-        <div className="mx-auto flex h-12 max-w-[1180px] items-center gap-4 px-6">
+        <div className="mx-auto flex h-12 max-w-[1180px] items-center gap-3 px-6">
           <Link
             href="/dashboard"
             className="cn-hover inline-flex items-center gap-1.5 text-[13px]"
@@ -267,36 +303,21 @@ export function RunView({ runId, domain }: { runId: string; domain: string }) {
           >
             <ArrowLeft className="h-3.5 w-3.5" /> Dashboard
           </Link>
-          <span className="data text-[13px]" style={{ color: "var(--foreground)" }}>
+          <span
+            className="h-4 w-px shrink-0"
+            style={{ background: "var(--border)" }}
+          />
+          <span className="eyebrow shrink-0">Run</span>
+          <span
+            className="data min-w-0 truncate text-[13px]"
+            style={{ color: "var(--foreground)" }}
+            title={domain || runId}
+          >
             {domain || runId}
           </span>
-          {running && (
-            <span
-              className="data ml-auto text-[10px] uppercase tracking-[0.08em]"
-              style={{
-                color: "var(--primary)",
-                animation: "cursor-blink 1.2s ease-in-out infinite",
-              }}
-            >
-              live
-            </span>
-          )}
-          {state.finished === "done" && (
-            <span
-              className="data ml-auto text-[10px] uppercase tracking-[0.08em]"
-              style={{ color: "var(--success)" }}
-            >
-              complete
-            </span>
-          )}
-          {state.finished === "error" && (
-            <span
-              className="data ml-auto text-[10px] uppercase tracking-[0.08em]"
-              style={{ color: "var(--danger)" }}
-            >
-              error
-            </span>
-          )}
+          <span className="ml-auto shrink-0">
+            <StatusPill running={running} finished={state.finished} />
+          </span>
         </div>
       </header>
 
@@ -308,14 +329,18 @@ export function RunView({ runId, domain }: { runId: string; domain: string }) {
             classify={state.classify}
             proxyUnlocked={proxyUnlocked}
           />
-          {state.score && (
+          {(state.lines.length > 0 ||
+            state.shots.length > 0 ||
+            state.toolCalls.length > 0) && (
             <div
-              className="rounded border px-3 py-2 text-[12px]"
+              className="flex flex-col gap-1 rounded border px-3 py-2.5 text-[12px]"
               style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
             >
-              <span className="eyebrow mr-1.5 text-[10px]">checks</span>
-              {state.lines.length} lines · {state.shots.length} frames ·{" "}
-              {state.toolCalls.length} tool calls
+              <span className="eyebrow text-[10px]">activity</span>
+              <span className="data">
+                {state.lines.length} lines · {state.shots.length} frames ·{" "}
+                {state.toolCalls.length} tool calls
+              </span>
             </div>
           )}
         </aside>

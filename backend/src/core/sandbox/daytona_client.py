@@ -197,10 +197,15 @@ class DaytonaClient:
     def _make_client() -> "AsyncDaytona":
         if not DAYTONA_AVAILABLE:
             raise RuntimeError("daytona package not installed. Run: pip install daytona==0.179.0")
-        config = DaytonaConfig(
-            api_key=settings.DAYTONA_API_KEY,
-            server_url=settings.DAYTONA_SERVER_URL,
-        )
+        # Match Crossnode: let the SDK use its default API endpoint. Passing the
+        # dashboard URL (app.daytona.io) as server_url makes the SDK hit CloudFront
+        # and get a 403 "request method not allowed". Only override if a real,
+        # non-default API base is explicitly configured.
+        _url = (settings.DAYTONA_SERVER_URL or "").strip()
+        if _url and "app.daytona.io" not in _url:
+            config = DaytonaConfig(api_key=settings.DAYTONA_API_KEY, server_url=_url)
+        else:
+            config = DaytonaConfig(api_key=settings.DAYTONA_API_KEY)
         return AsyncDaytona(config)
 
     @staticmethod

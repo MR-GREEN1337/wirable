@@ -36,6 +36,25 @@ WEIGHTS: dict[str, int] = dict(DIMENSION_WEIGHTS)
 # Minimum margin (|agree - disagree| / total) to consider consensus reached
 DELTA: float = 0.7
 
+import re as _re
+
+
+def clean_evidence(text: object, limit: int = 180) -> str:
+    """Sanitize a piece of evidence for display — never let a raw HTML error
+    page (e.g. a CloudFront 403) leak into the UI. Collapses HTML to a short
+    status hint, strips tags, collapses whitespace, truncates."""
+    if not text:
+        return ""
+    s = str(text)
+    low = s.lower()
+    if "<html" in low or "<!doctype" in low or "cloudfront" in low:
+        m = _re.search(r"(\d{3})\s*error", low) or _re.search(r"\b(4\d\d|5\d\d)\b", s)
+        code = m.group(1) if m else ""
+        return f"sandbox unavailable{(' — upstream ' + code) if code else ''}"
+    s = _re.sub(r"<[^>]+>", " ", s)
+    s = _re.sub(r"\s+", " ", s).strip()
+    return (s[:limit].rstrip() + "…") if len(s) > limit else s
+
 
 def catts_aggregate(results: list[dict]) -> dict | None:
     """
@@ -80,7 +99,7 @@ def catts_aggregate(results: list[dict]) -> dict | None:
         dims[dim] = {
             "passed": passed,
             "confidence": round(confidence, 4),
-            "evidence": " | ".join(dict.fromkeys(e for e in evidences if e)),  # dedup + preserve order
+            "evidence": " | ".join(dict.fromkeys(clean_evidence(e) for e in evidences if e))[:240],  # cleaned, deduped, capped
             "weight": WEIGHTS[dim],
         }
 

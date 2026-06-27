@@ -12,6 +12,10 @@ ENV NEXT_TELEMETRY_DISABLED=1
 # `next build`. Pass via --build-arg NEXT_PUBLIC_BACKEND_URL=...
 ARG NEXT_PUBLIC_BACKEND_URL
 ENV NEXT_PUBLIC_BACKEND_URL=$NEXT_PUBLIC_BACKEND_URL
+# Rewrite destination is baked into the build (next.config rewrites() runs at build),
+# so BACKEND_URL must be present at build time too.
+ARG BACKEND_URL
+ENV BACKEND_URL=$BACKEND_URL
 RUN npm run build
 
 FROM node:20-alpine AS runner

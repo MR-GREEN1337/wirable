@@ -11,6 +11,18 @@ export type ToolCall = {
   normalized: NormalizedEnvelope;
 };
 
+const MAX_CHARS = 2000;
+
+// Detect a raw HTML document/fragment so we summarize instead of dumping it.
+function looksLikeHtml(s: string): boolean {
+  const head = s.trimStart().slice(0, 200).toLowerCase();
+  return (
+    head.startsWith("<!doctype") ||
+    head.startsWith("<html") ||
+    (/<\/?[a-z][\s\S]*>/i.test(s) && s.includes("</"))
+  );
+}
+
 function pretty(value: unknown): string {
   if (value === null || value === undefined) return "—";
   if (typeof value === "string") return value;
@@ -22,6 +34,15 @@ function pretty(value: unknown): string {
 }
 
 function CodeBlock({ label, value }: { label: string; value: unknown }) {
+  const raw = pretty(value);
+  const isHtml = typeof value === "string" && looksLikeHtml(value);
+  // Never render raw HTML; show a compact, capped, monospace preview instead.
+  const body = isHtml
+    ? `[HTML response · ${value.length.toLocaleString()} chars hidden]`
+    : raw.length > MAX_CHARS
+      ? `${raw.slice(0, MAX_CHARS)}\n… (${(raw.length - MAX_CHARS).toLocaleString()} more chars)`
+      : raw;
+
   return (
     <div className="min-w-0 flex-1">
       <div className="eyebrow mb-1 text-[10px]" style={{ color: "var(--t-muted)" }}>
@@ -32,12 +53,12 @@ function CodeBlock({ label, value }: { label: string; value: unknown }) {
         style={{
           background: "var(--t-bg)",
           border: "1px solid var(--t-border)",
-          color: "var(--t-fg)",
+          color: isHtml ? "var(--t-muted)" : "var(--t-fg)",
           whiteSpace: "pre-wrap",
-          wordBreak: "break-word",
+          wordBreak: "break-all",
         }}
       >
-        {pretty(value)}
+        {body}
       </pre>
     </div>
   );

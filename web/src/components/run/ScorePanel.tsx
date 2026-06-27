@@ -22,6 +22,17 @@ interface ScorePanelProps {
   dimensions: ScoreDimension[];
 }
 
+// Frontend-side defense: even if the backend ever sends a giant or repeated
+// error blob, collapse whitespace, dedup a repeated phrase, and hard-cap the
+// length. The row truncates visually too — full text lives in the title tooltip.
+function cleanEvidence(raw: string | undefined): string {
+  if (!raw) return "";
+  let s = raw.replace(/\s+/g, " ").trim();
+  // Kill a phrase repeated back-to-back (e.g. "X X X" → "X").
+  s = s.replace(/(.{8,}?)(?:\s*\1)+/g, "$1");
+  return s.length > 240 ? `${s.slice(0, 240)}…` : s;
+}
+
 export function ScorePanel({ total, dimensions }: ScorePanelProps) {
   const color = scoreColor(total);
 
@@ -70,49 +81,47 @@ export function ScorePanel({ total, dimensions }: ScorePanelProps) {
         <div className="h-0.5" style={{ width: `${total}%`, background: color }} />
       </div>
 
-      {/* 6 dimensions */}
+      {/* 6 dimensions — each row stays one line; evidence clamps + tooltips */}
       <ul>
         {dimensions.map((d, i) => {
           const meta = DIM_META[d.dim];
           const label = meta?.label ?? d.dim.replace(/_/g, " ");
+          const evidence = cleanEvidence(d.evidence);
           return (
             <li
               key={d.dim}
-              className="flex items-start gap-3 px-4 py-2.5"
+              className="flex items-center gap-3 px-4 py-2.5"
               style={{ borderTop: i === 0 ? "none" : "1px solid var(--border)" }}
             >
               {d.passed ? (
                 <CheckCircle2
-                  className="mt-0.5 h-4 w-4 shrink-0"
+                  className="h-4 w-4 shrink-0"
                   style={{ color: "var(--success)" }}
                 />
               ) : (
                 <XCircle
-                  className="mt-0.5 h-4 w-4 shrink-0"
+                  className="h-4 w-4 shrink-0"
                   style={{ color: "var(--danger)" }}
                 />
               )}
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span className="text-[13px] font-medium">{label}</span>
-                  {meta && (
-                    <span
-                      className="data text-[10px]"
-                      style={{ color: "var(--fg-subtle)" }}
-                    >
-                      +{meta.weight}
-                    </span>
-                  )}
-                </div>
-                {d.evidence && (
-                  <p
-                    className="mt-0.5 text-[12px] leading-relaxed"
-                    style={{ color: "var(--muted-foreground)" }}
-                  >
-                    {d.evidence}
-                  </p>
-                )}
-              </div>
+              <span className="shrink-0 text-[13px] font-medium">{label}</span>
+              {meta && (
+                <span
+                  className="data shrink-0 text-[10px]"
+                  style={{ color: "var(--fg-subtle)" }}
+                >
+                  +{meta.weight}
+                </span>
+              )}
+              {evidence && (
+                <span
+                  className="min-w-0 flex-1 truncate text-right text-[12px]"
+                  style={{ color: "var(--muted-foreground)" }}
+                  title={evidence}
+                >
+                  {evidence}
+                </span>
+              )}
             </li>
           );
         })}

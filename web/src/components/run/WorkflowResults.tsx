@@ -26,35 +26,34 @@ export function WorkflowResults({ results }: { results: WorkflowResult[] }) {
         {results.map((r, i) => (
           <li
             key={r.workflow}
-            className="flex items-start gap-3 px-4 py-2.5"
+            className="flex items-center gap-3 px-4 py-2.5"
             style={{ borderTop: i === 0 ? "none" : "1px solid var(--border)" }}
           >
             {r.passed ? (
               <CheckCircle2
-                className="mt-0.5 h-4 w-4 shrink-0"
+                className="h-4 w-4 shrink-0"
                 style={{ color: "var(--success)" }}
               />
             ) : (
               <XCircle
-                className="mt-0.5 h-4 w-4 shrink-0"
+                className="h-4 w-4 shrink-0"
                 style={{ color: "var(--danger)" }}
               />
             )}
-            <div className="min-w-0 flex-1">
-              <div className="text-[13px] font-medium">
-                {WORKFLOW_LABELS[r.workflow] ?? r.workflow}
-              </div>
-              {r.evidence && (
-                <p
-                  className="mt-0.5 text-[12px] leading-relaxed"
-                  style={{ color: "var(--muted-foreground)" }}
-                >
-                  {r.evidence}
-                </p>
-              )}
-            </div>
+            <span className="shrink-0 text-[13px] font-medium">
+              {WORKFLOW_LABELS[r.workflow] ?? r.workflow}
+            </span>
+            {r.evidence && (
+              <span
+                className="min-w-0 flex-1 truncate text-[12px]"
+                style={{ color: "var(--muted-foreground)" }}
+                title={r.evidence}
+              >
+                {r.evidence}
+              </span>
+            )}
             <span
-              className="data shrink-0 text-[10px] uppercase tracking-[0.08em]"
+              className="data ml-auto shrink-0 text-[10px] uppercase tracking-[0.08em]"
               style={{ color: r.passed ? "var(--success)" : "var(--danger)" }}
             >
               {r.passed ? "pass" : "fail"}

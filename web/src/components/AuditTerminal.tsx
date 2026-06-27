@@ -375,7 +375,8 @@ export function AuditTerminal({
               lines.map((line, i) => (
                 <div
                   key={i}
-                  className="flex gap-2 leading-relaxed"
+                  className="flex min-w-0 items-baseline gap-2 leading-relaxed"
+                  title={`${line.dim ? `[${line.dim}] ` : ""}${line.msg}`}
                   style={{
                     animation: `cn-enter 120ms cubic-bezier(0.16,1,0.3,1) ${Math.min(i * 30, 300)}ms both`,
                   }}
@@ -386,15 +387,19 @@ export function AuditTerminal({
                   >
                     {getLinePrefix(line.type)}
                   </span>
-                  <span style={{ color: getLineColor(line.type) }}>
-                    {line.dim && (
-                      <span
-                        className="mr-2 text-[10px] uppercase tracking-wider"
-                        style={{ color: "var(--t-muted)" }}
-                      >
-                        [{line.dim}]
-                      </span>
-                    )}
+                  {line.dim && (
+                    <span
+                      className="shrink-0 text-[10px] uppercase tracking-wider"
+                      style={{ color: "var(--t-muted)" }}
+                    >
+                      [{line.dim}]
+                    </span>
+                  )}
+                  {/* One row only — a 2KB blob never wraps the terminal. */}
+                  <span
+                    className="min-w-0 flex-1 truncate"
+                    style={{ color: getLineColor(line.type) }}
+                  >
                     {line.msg}
                   </span>
                 </div>
