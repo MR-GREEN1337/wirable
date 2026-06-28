@@ -54,6 +54,26 @@ DIM_LABELS = {
 }
 DIM_ORDER = list(DIM_LABELS.keys())
 
+# Live progress: the orchestrator (github_harness_fix) tails this file while the
+# driver runs and streams each line onto the run's SSE bus, so the user watches
+# the GitHub fix agent work in real time on the run page.
+PROGRESS_PATH = "/tmp/fix_progress.log"
+
+
+def step(msg: str) -> None:
+    """Append a progress line (tailed live) + print it. Never raises."""
+    line = msg.rstrip()
+    try:
+        with open(PROGRESS_PATH, "a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+            fh.flush()
+    except Exception:  # noqa: BLE001
+        pass
+    try:
+        print(line, flush=True)
+    except Exception:  # noqa: BLE001
+        pass
+
 
 def sh(*args: str, cwd: str | None = None, timeout: int = 180) -> tuple[int, str]:
     """Run a subprocess; return (returncode, combined stdout+stderr). Never raises."""
@@ -219,10 +239,15 @@ def gen_files(framework: str, readme: str, top: list[str], dims: list[dict], car
     mcp_line = MCP_URL or "(Wirable hosted MCP endpoint, set at deploy)"
 
     # Ask Claude for grounded llms.txt + AGENTS.md bodies; fall back to templates.
+    step("writing llms.txt — the agent-facing index…")
     llms = _gen_llms(name, framework, dims) or _tpl_llms(name, mcp_line)
+    step("writing AGENTS.md — the coding-agent guide…")
     agents = _gen_agents(name, framework, top, suggestions) or _tpl_agents(name, mcp_line, suggestions)
+    step("writing CLAUDE.md — repo instructions for Claude Code…")
     claude_md = _gen_claude_md(name, framework, suggestions) or _tpl_claude(name, mcp_line, suggestions)
+    step("writing docs/agent-readiness.md — the audit report…")
     docs = _tpl_docs(dims, cards, suggestions)  # deterministic report
+    step("writing .well-known/mcp.json — MCP discovery manifest…")
     wellknown = json.dumps(_wellknown(name), indent=2) + "\n"
 
     return {
@@ -448,19 +473,21 @@ def main() -> None:
         print("fix_driver: missing args")
         return
 
+    step("preparing the sandbox (git)…")
     if not ensure_git():
         out["error"] = "git unavailable in sandbox"
         write_output(out)
-        print("fix_driver: git unavailable")
+        step("git unavailable in sandbox — aborting")
         return
 
     # 1) clone --------------------------------------------------------------
+    step(f"cloning {REPO_FULL}…")
     sh("rm", "-rf", REPO_DIR, timeout=60)
     rc, log = sh("git", "clone", "--depth", "1", CLONE_URL, REPO_DIR, timeout=300)
     if rc != 0:
         out["error"] = "clone failed: " + (log[-300:] if log else "unknown")
         write_output(out)
-        print("fix_driver: clone failed")
+        step("clone failed — aborting")
         return
     sh("git", "config", "user.name", "wirable-bot", cwd=REPO_DIR, timeout=30)
     sh("git", "config", "user.email", "bot@wirable.dev", cwd=REPO_DIR, timeout=30)
@@ -476,6 +503,7 @@ def main() -> None:
         top = []
     top = [t for t in top if t != ".git"]
     framework = detect_framework(top)
+    step(f"cloned — stack detected: {framework}")
     readme = ""
     for cand in ("README.md", "Readme.md", "readme.md", "README"):
         p = os.path.join(REPO_DIR, cand)
@@ -485,6 +513,11 @@ def main() -> None:
 
     # 3) load audit + generate file contents --------------------------------
     dims, cards, _raw = load_audit()
+    failing = [DIM_LABELS.get(d["dim"], d["dim"]) for d in dims if not d.get("passed")]
+    step(
+        f"reading audit findings — {len(failing)} gap(s) to address"
+        + (": " + ", ".join(failing[:4]) if failing else "")
+    )
     files = gen_files(framework, readme, top, dims, cards)
 
     written: list[str] = []
@@ -498,8 +531,10 @@ def main() -> None:
         except Exception as e:  # noqa: BLE001
             print(f"fix_driver: failed to write {rel}: {e}")
     out["files"] = written
+    step(f"wrote {len(written)} file(s): {', '.join(written)}")
 
     # 4) branch, commit, push ----------------------------------------------
+    step(f"committing on branch {BRANCH}…")
     # checkout -B is idempotent (resets the branch if it already exists locally).
     sh("git", "checkout", "-B", BRANCH, cwd=REPO_DIR, timeout=60)
     sh("git", "add", "-A", cwd=REPO_DIR, timeout=60)
@@ -535,6 +570,7 @@ def main() -> None:
     out["commit"] = sha.strip() if rc == 0 else ""
 
     # push --force-with-lease; idempotent (branch may already exist on origin).
+    step(f"pushing {BRANCH} to origin…")
     rc, push_log = sh(
         "git", "push", "-u", "origin", BRANCH, "--force-with-lease",
         cwd=REPO_DIR, timeout=300,
@@ -550,7 +586,7 @@ def main() -> None:
         out["pushed"] = False
         out["error"] = "push failed: " + (push_log[-300:] if push_log else "unknown")
         write_output(out)
-        print("fix_driver: push failed")
+        step("push failed — aborting")
         return
 
     out["pushed"] = True
@@ -559,7 +595,7 @@ def main() -> None:
         f"(score {score}/100, stack: {framework})."
     )
     write_output(out)
-    print(f"fix_driver: pushed {BRANCH} ({len(written)} files), commit {out['commit'][:8]}")
+    step(f"pushed ✓ commit {out['commit'][:8]} — opening pull request…")
 
 
 if __name__ == "__main__":

@@ -19,6 +19,7 @@ Defensive contract: run_harness_fix never raises — any exception becomes a
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import shlex
 from typing import Any, Optional
@@ -41,6 +42,47 @@ from pathlib import Path
 _FIX_DRIVER_PATH = Path(__file__).parent.parent / "harness" / "fix_driver.py"
 _EXEC_TIMEOUT = 600
 _BRANCH = "wirable/agent-ready"
+_FIX_POLL_S = 1.5  # how often we tail the driver's progress log
+
+
+async def _stream_fix_run(sb, cmd: str, line_cb) -> None:
+    """Run the fix driver in the background and STREAM its progress live.
+
+    The driver appends one line per step to /tmp/fix_progress.log; we poll that
+    file every _FIX_POLL_S and emit each NEW line via line_cb (a `line` event on
+    the run bus) until the command finishes — so the user watches the GitHub fix
+    agent work in real time. Fully defensive: any streaming hiccup still lets the
+    command run to completion and the caller reads /tmp/fix_output.json as usual.
+    """
+    cmd_id = await sb.exec_bg(cmd)
+    emitted = 0
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + _EXEC_TIMEOUT
+    while True:
+        try:
+            done = await sb.is_command_done(cmd_id)
+        except Exception as e:  # transient — keep polling
+            logger.debug("[harness_fix] is_command_done errored: {}", e)
+            done = False
+
+        try:
+            blob = await sb.read("/tmp/fix_progress.log")
+            if blob:
+                lines = blob.decode(errors="replace").splitlines()
+                for ln in lines[emitted:]:
+                    ln = ln.strip()
+                    if ln:
+                        await line_cb(ln)
+                emitted = len(lines)
+        except Exception as e:
+            logger.debug("[harness_fix] progress tail failed (non-fatal): {}", e)
+
+        if done:
+            break
+        if loop.time() > deadline:
+            logger.warning("[harness_fix] stream hit hard timeout %ss", _EXEC_TIMEOUT)
+            break
+        await asyncio.sleep(_FIX_POLL_S)
 
 
 def _build_env(proxy_mcp_url: str) -> Optional[dict[str, str]]:
@@ -141,14 +183,18 @@ async def run_harness_fix(
             await sb.upload("/tmp/fix_driver.py", driver_src.encode())
             await sb.upload("/tmp/audit.json", audit_blob)
 
-            await _line(f"cloning {repo_full_name}…")
-            await _line("generating agent-ready changes…")
+            await _line("starting the GitHub fix agent…")
+            # The driver writes step-by-step progress to /tmp/fix_progress.log;
+            # run it in the background and TAIL that log so every step streams
+            # live onto the run page (the user watches the agent work).
             cmd = (
+                "rm -f /tmp/fix_progress.log /tmp/fix_output.json; "
                 "cd /tmp && python3 /tmp/fix_driver.py "
                 f"{shlex.quote(clone_url)} {shlex.quote(repo_full_name)} "
-                f"{shlex.quote(target_url or '')} /tmp/audit.json 2>&1 || true"
+                f"{shlex.quote(target_url or '')} /tmp/audit.json "
+                "> /tmp/fix_run.log 2>&1 || true"
             )
-            await sb.exec(cmd, timeout=_EXEC_TIMEOUT)
+            await _stream_fix_run(sb, cmd, _line)
 
             raw = await sb.read("/tmp/fix_output.json")
 

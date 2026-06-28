@@ -533,9 +533,13 @@ export function RunView({ runId, domain }: { runId: string; domain: string }) {
             <HumanInputPrompt runId={runId} pending={state.pendingInput} />
           )}
 
-          {/* Activity log */}
+          {/* Activity log — also live while the GitHub fix agent is working
+              (it streams its steps here after the audit's terminal `done`). */}
           <Section title="Activity">
-            <ActivityStream lines={state.lines} running={running} />
+            <ActivityStream
+              lines={state.lines}
+              running={running || (fixStarted && !state.fixPr)}
+            />
           </Section>
 
           {/* Tool calls */}
