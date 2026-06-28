@@ -74,7 +74,10 @@ def run_slots_busy() -> bool:
 _SHOT_POLL_S = 1.2          # sweep /tmp/screenshots ~2x faster so frames feel live
 _SHOT_HARD_TIMEOUT_S = 900  # ceiling on the streaming loop (matches exec timeout)
 _SHOT_MAX_FRAMES = 160      # before+after shots per step ~2x the frame count; don't truncate
-_SHOT_MAX_B64 = 250_000     # skip any single frame whose base64 exceeds this
+_SHOT_MAX_B64 = 2_500_000   # skip any single frame whose base64 exceeds this.
+# A full rendered page screenshot is commonly 400-700KB of base64; the old
+# 250KB cap silently dropped EVERY frame on rich pages -> the live viewport
+# loaded forever. 2.5MB covers full-page captures while still bounding payload.
 
 # Path to the harness audit prompt
 AUDIT_PROMPT_PATH = (
