@@ -1,8 +1,11 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import { signIn } from "next-auth/react";
-import { useSearchParams } from "next/navigation";
+import { signIn, useSession } from "next-auth/react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { Logo } from "@/components/global/Logo";
+import { track } from "@/components/global/Analytics";
+import { Turnstile } from "@/components/global/Turnstile";
 import { cn } from "@/lib/utils";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "";
@@ -34,10 +37,85 @@ function GoogleIcon() {
 export default function SignInPage() {
   const params        = useSearchParams();
   const callbackUrl   = params.get("callbackUrl") ?? "/dashboard";
+  const router        = useRouter();
+  const { status: authStatus } = useSession();
+
+  // Already signed in? Don't show the auth page — go to the dashboard.
+  useEffect(() => {
+    if (authStatus === "authenticated") router.replace(callbackUrl || "/dashboard");
+  }, [authStatus, router, callbackUrl]);
   const [guestName, setGuestName]   = useState<string>("");
   const [guestLoading, setGuestLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [flipping, setFlipping] = useState(false);
+
+  // ── Email / password ─────────────────────────────────────────────────────
+  const [mode, setMode] = useState<"login" | "signup">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [turnstileToken, setTurnstileToken] = useState("");
+  const [pwLoading, setPwLoading] = useState(false);
+  const [pwError, setPwError] = useState("");
+
+  const busy = pwLoading || googleLoading || guestLoading;
+
+  async function handlePasswordSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (pwLoading) return;
+    setPwError("");
+    setPwLoading(true);
+    try {
+      const isSignup = mode === "signup";
+      const endpoint = isSignup ? "/api/v1/auth/signup" : "/api/v1/auth/login";
+      const body = isSignup
+        ? { email, password, turnstile_token: turnstileToken }
+        : { email, password };
+
+      const r = await fetch(`${BACKEND_URL}${endpoint}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!r.ok) {
+        let detail = "";
+        try { detail = (await r.json())?.detail ?? ""; } catch {}
+        if (r.status === 409) {
+          setPwError("Account exists, try signing in");
+          setMode("login");
+        } else if (r.status === 401) {
+          setPwError("Wrong email or password.");
+        } else if (r.status === 400) {
+          setPwError("Bot check failed, retry");
+        } else if (r.status === 422) {
+          setPwError(detail || "Please check your details.");
+        } else {
+          setPwError(detail || "Something went wrong. Try again.");
+        }
+        setPwLoading(false);
+        return;
+      }
+
+      const data = await r.json() as {
+        access_token: string;
+        user: { name: string };
+      };
+      track("signed_in", { provider: "password" });
+      await signIn("password", {
+        token: data.access_token,
+        name: data.user?.name ?? "",
+        callbackUrl,
+      });
+    } catch {
+      setPwError("Network error. Try again.");
+      setPwLoading(false);
+    }
+  }
+
+  const signupReady =
+    mode === "login" || Boolean(turnstileToken) || !process.env.NEXT_PUBLIC_TURNSTILE_SITE_KEY;
+  const pwSubmitDisabled = busy || !email || !password ||
+    (mode === "signup" && !signupReady);
 
   // Pre-fetch a name from the backend; fall back to local generation
   useEffect(() => {
@@ -67,6 +145,7 @@ export default function SignInPage() {
 
   async function handleGoogle() {
     setGoogleLoading(true);
+    track("signed_in", { provider: "google" });
     await signIn("google", { callbackUrl });
   }
 
@@ -81,6 +160,7 @@ export default function SignInPage() {
       });
       if (!r.ok) throw new Error("Guest auth failed");
       const { access_token } = await r.json() as { access_token: string };
+      track("signed_in", { provider: "guest" });
       await signIn("guest", { token: access_token, name: guestName, callbackUrl });
     } catch {
       setGuestLoading(false);
@@ -106,8 +186,9 @@ export default function SignInPage() {
 
       <div className="relative z-10 flex w-full max-w-sm flex-col gap-8 px-6">
         {/* Wordmark */}
-        <div className="text-center">
-          <p className="eyebrow mb-3" style={{ color: "var(--muted-foreground)" }}>
+        <div className="flex flex-col items-center text-center">
+          <Logo size={44} className="mb-3" />
+          <p className="eyebrow mb-2" style={{ color: "var(--muted-foreground)" }}>
             agent workflow proxy
           </p>
           <h1
@@ -120,10 +201,85 @@ export default function SignInPage() {
 
         {/* Buttons */}
         <div className="flex flex-col gap-3">
+          {/* Email / password */}
+          <form onSubmit={handlePasswordSubmit} className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-medium" style={{ color: "var(--foreground)" }}>
+                {mode === "signup" ? "Create account" : "Sign in"}
+              </h2>
+              <button
+                type="button"
+                onClick={() => { setMode(m => m === "signup" ? "login" : "signup"); setPwError(""); }}
+                className="text-[11px] underline underline-offset-2 transition-colors duration-[80ms] hover:text-foreground"
+                style={{ color: "var(--muted-foreground)" }}
+              >
+                {mode === "signup" ? "Have an account? Sign in" : "New here? Create account"}
+              </button>
+            </div>
+
+            <input
+              type="email"
+              autoComplete="email"
+              placeholder="you@company.com"
+              value={email}
+              onChange={e => setEmail(e.target.value)}
+              className="h-11 w-full rounded border px-3 text-sm outline-none transition-colors duration-[80ms] focus:border-[oklch(0.65_0.16_240)]"
+              style={{
+                borderColor: "var(--border-strong)",
+                background: "var(--surface-1)",
+                color: "var(--foreground)",
+              }}
+            />
+            <input
+              type="password"
+              autoComplete={mode === "signup" ? "new-password" : "current-password"}
+              placeholder={mode === "signup" ? "Password (8+ characters)" : "Password"}
+              value={password}
+              onChange={e => setPassword(e.target.value)}
+              className="h-11 w-full rounded border px-3 text-sm outline-none transition-colors duration-[80ms] focus:border-[oklch(0.65_0.16_240)]"
+              style={{
+                borderColor: "var(--border-strong)",
+                background: "var(--surface-1)",
+                color: "var(--foreground)",
+              }}
+            />
+
+            {mode === "signup" && (
+              <Turnstile onToken={setTurnstileToken} />
+            )}
+
+            {pwError && (
+              <p className="text-[11px]" style={{ color: "oklch(0.62 0.2 25)" }}>{pwError}</p>
+            )}
+
+            <button
+              type="submit"
+              disabled={pwSubmitDisabled}
+              className={cn(
+                "flex h-11 w-full items-center justify-center gap-2 rounded text-sm font-medium",
+                "transition-colors duration-[80ms] ease-linear disabled:opacity-50",
+                "bg-[oklch(0.65_0.16_240)] hover:bg-[oklch(0.69_0.16_240)]"
+              )}
+              style={{ color: "#fff" }}
+            >
+              {pwLoading
+                ? <span className="h-4 w-4 rounded-full border-2 border-current border-t-transparent animate-spin" />
+                : (mode === "signup" ? "Create account" : "Sign in")
+              }
+            </button>
+          </form>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3">
+            <div className="h-px flex-1" style={{ background: "var(--border)" }} />
+            <span className="text-xs" style={{ color: "var(--muted-foreground)" }}>or</span>
+            <div className="h-px flex-1" style={{ background: "var(--border)" }} />
+          </div>
+
           {/* Google */}
           <button
             onClick={handleGoogle}
-            disabled={googleLoading || guestLoading}
+            disabled={busy}
             className={cn(
               "flex h-11 w-full items-center justify-center gap-2.5 rounded",
               "border text-sm font-medium transition-colors duration-[80ms] ease-linear",
@@ -149,49 +305,21 @@ export default function SignInPage() {
             <div className="h-px flex-1" style={{ background: "var(--border)" }} />
           </div>
 
-          {/* Guest */}
-          <div className="flex gap-1.5">
-            <button
-              onClick={handleGuest}
-              disabled={guestLoading || googleLoading || !guestName}
-              className={cn(
-                "relative flex h-11 flex-1 items-center justify-center gap-2 rounded",
-                "text-sm font-medium transition-colors duration-[80ms] ease-linear",
-                "bg-[oklch(0.65_0.16_240)] hover:bg-[oklch(0.69_0.16_240)] disabled:opacity-50"
-              )}
-              style={{ color: "#fff" }}
-            >
-              {guestLoading
-                ? <span className="h-4 w-4 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                : (
-                  <span className={cn("transition-opacity duration-120", flipping && "opacity-0")}>
-                    Enter as{" "}
-                    <span className="font-semibold">{displayName}</span>
-                  </span>
-                )
-              }
-              {!guestLoading && <span className="opacity-70">→</span>}
-            </button>
-
-            {/* Re-roll */}
-            <button
-              onClick={reroll}
-              disabled={guestLoading || googleLoading}
-              title="Get a different name"
-              className={cn(
-                "flex h-11 w-11 items-center justify-center rounded border",
-                "text-sm transition-colors duration-[80ms] ease-linear hover:bg-surface-2 disabled:opacity-40"
-              )}
-              style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
-            >
-              ↻
-            </button>
-          </div>
-
-          {/* Guest note */}
-          <p className="text-center text-[11px]" style={{ color: "var(--fg-subtle)" }}>
-            Guest sessions last 7 days · no email required
-          </p>
+          {/* Access code — kept for judges / invite flow */}
+          <a
+            href="/access"
+            className={cn(
+              "flex h-11 w-full items-center justify-center gap-2 rounded text-sm font-medium",
+              "border transition-colors duration-[80ms] ease-linear hover:bg-surface-2"
+            )}
+            style={{
+              borderColor: "var(--border-strong)",
+              background: "var(--surface-1)",
+              color: "var(--foreground)",
+            }}
+          >
+            Enter an access code <span className="opacity-70">→</span>
+          </a>
         </div>
 
         {/* Footer */}

@@ -22,6 +22,9 @@ type AppToken = {
 };
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
+  // Auth.js v5 refuses requests from non-vercel hosts unless the host is
+  // trusted. We run behind our own origin (raw IP / Coolify), so trust it.
+  trustHost: true,
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID!,
@@ -45,6 +48,27 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           name: credentials.name as string,
           backendToken: credentials.token as string,
           isGuest: true,
+        } as unknown as import("next-auth").User;
+      },
+    }),
+
+    // Password login — receives a pre-issued backend JWT from the sign-in page
+    // (signup/login already exchanged email+password for it). Mirrors guest but
+    // is NOT a guest, so no guest badge anywhere.
+    Credentials({
+      id: "password",
+      name: "Password",
+      credentials: {
+        token: { label: "Token", type: "text" },
+        name:  { label: "Name",  type: "text" },
+      },
+      async authorize(credentials) {
+        if (!credentials?.token) return null;
+        return {
+          id: `user-${Date.now()}`,
+          name: (credentials.name as string) || "",
+          backendToken: credentials.token as string,
+          isGuest: false,
         } as unknown as import("next-auth").User;
       },
     }),
@@ -86,6 +110,13 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         token.backendToken = (user as any).backendToken as string;
         token.userName     = user.name ?? "";
         token.isGuest      = true;
+      }
+
+      // Password credentials path — same shape as guest, but a real account
+      if (account?.provider === "password" && (user as any)?.backendToken) {
+        token.backendToken = (user as any).backendToken as string;
+        token.userName     = user.name ?? "";
+        token.isGuest      = false;
       }
 
       return token;

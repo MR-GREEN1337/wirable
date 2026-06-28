@@ -1,5 +1,7 @@
 import { auth } from "@/lib/auth";
 import { redirect } from "next/navigation";
+import { Wordmark } from "@/components/global/Logo";
+import { AccessChip } from "@/components/AccessGate";
 
 export default async function DashboardLayout({
   children,
@@ -28,20 +30,26 @@ export default async function DashboardLayout({
     >
       <nav
         className="sticky top-0 z-40 border-b"
-        style={{ background: "var(--surface-1)", borderColor: "var(--border)" }}
+        style={{
+          background: "color-mix(in oklch, var(--surface-1) 85%, transparent)",
+          backdropFilter: "blur(12px)",
+          WebkitBackdropFilter: "blur(12px)",
+          borderColor: "var(--border)",
+        }}
       >
-        <div className="mx-auto flex h-12 max-w-6xl items-center gap-6 px-6">
-          <a href="/dashboard" className="font-display text-sm font-bold uppercase tracking-wider">
-            Wirable
-          </a>
+        <div className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-6">
+          <Wordmark href="/dashboard" size={20} />
 
-          <div className="flex flex-1 items-center gap-6 text-xs">
-            <a href="/dashboard" className="cn-hover" style={{ color: "var(--muted-foreground)" }}>
+          <div className="flex flex-1 items-center gap-6 text-[13px]">
+            <a href="/dashboard" className="cn-hover" style={{ color: "var(--foreground)" }}>
               Dashboard
             </a>
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Entitlement: remaining free runs / unlimited / get-access */}
+            <AccessChip />
+
             {/* Guest badge or avatar */}
             {isGuest ? (
               <span

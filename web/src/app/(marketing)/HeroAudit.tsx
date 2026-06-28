@@ -1,149 +1,130 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
-import Link from "next/link";
-import { ArrowRight } from "lucide-react";
-import { AuditTerminal, type TerminalLine, type AuditShot } from "@/components/AuditTerminal";
+import { useSession } from "next-auth/react";
 import { CtaButton } from "@/components/CtaButton";
+import { AccessFields, buildAccess, emptyAccess, type AccessState } from "@/components/AccessFields";
+import { RunUpsell, readRunLimit, type AccessStatus } from "@/components/AccessGate";
+import { track } from "@/components/global/Analytics";
 import { cn } from "@/lib/utils";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "";
 
 export function HeroAudit() {
   const router = useRouter();
+  const { data: session, status: sessionStatus } = useSession();
   const [domain, setDomain] = useState("");
-  const [lines, setLines] = useState<TerminalLine[]>([]);
-  const [screenshots, setScreenshots] = useState<AuditShot[]>([]);
-  const [score, setScore] = useState<number | undefined>();
-  const [confidence, setConfidence] = useState<number | undefined>();
-  const [reportId, setReportId] = useState<string | undefined>();
-  const [running, setRunning] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const esRef = useRef<EventSource | null>(null);
+  const [access, setAccess] = useState<AccessState>(emptyAccess);
+  // When set, the free-run limit was hit → show the inline upsell instead of an error.
+  const [limit, setLimit] = useState<AccessStatus | null | true>(null);
+
+  // Returning from sign-in we carry the intended domain in ?domain= — prefill it.
+  // Read from the URL directly (no useSearchParams → no Suspense requirement on
+  // the statically-rendered marketing page).
+  useEffect(() => {
+    const d = new URLSearchParams(window.location.search).get("domain");
+    if (d) setDomain(d);
+  }, []);
 
   async function runAudit(e: React.FormEvent) {
     e.preventDefault();
     const raw = domain.trim().replace(/^https?:\/\//, "").replace(/\/$/, "");
     if (!raw) return;
 
-    setLines([]);
-    setScreenshots([]);
-    setScore(undefined);
-    setConfidence(undefined);
-    setReportId(undefined);
+    // Gate: a run requires a signed-in account. Send the visitor to sign-in and
+    // bring them right back to the landing hero with their domain prefilled.
+    if (sessionStatus !== "loading" && !session?.backendToken) {
+      const next = `/?domain=${encodeURIComponent(raw)}`;
+      router.push(`/signin?callbackUrl=${encodeURIComponent(next)}`);
+      return;
+    }
+
     setError(null);
-    setRunning(true);
+    setLimit(null);
+    setSubmitting(true);
 
     try {
-      // Kick off the test run (Wirable contract: POST /run {url}).
+      // Kick off the run, then hand off to the run cockpit — all the live
+      // streaming + verdict happens on /run/{id}, never on the landing page.
+      const accessObj = buildAccess(access);
       const res = await fetch(`${BACKEND_URL}/api/v1/run`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: raw }),
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${session!.backendToken}`,
+        },
+        body: JSON.stringify({ url: raw, ...(accessObj ? { access: accessObj } : {}) }),
       });
-
+      if (res.status === 401) {
+        router.push("/signin");
+        return;
+      }
+      if (res.status === 402) {
+        const body = await res.json().catch(() => null);
+        setLimit(readRunLimit(body) ?? true);
+        setSubmitting(false);
+        return;
+      }
       if (!res.ok) {
         const txt = await res.text();
         throw new Error(txt || `HTTP ${res.status}`);
       }
-
-      const { run_id } = await res.json() as { run_id: string };
-      setReportId(run_id);
-
-      // Connect to the run-event SSE stream (see core.contracts for shapes).
-      const es = new EventSource(`${BACKEND_URL}/api/v1/run/${run_id}/stream`);
-      esRef.current = es;
-
-      es.onmessage = (ev) => {
-        try {
-          const data = JSON.parse(ev.data) as {
-            type?: string;
-            ok?: boolean;
-            msg?: string;
-            total?: number;
-            seq?: number;
-            caption?: string;
-            dimension?: string;
-            image?: string;
-          };
-
-          if (data.type === "line" && data.msg) {
-            const msg = data.msg;
-            setLines((prev) => [...prev, { type: data.ok !== false ? "ok" : "err", msg }]);
-          } else if (data.type === "screenshot" && data.image && data.seq !== undefined) {
-            const shot: AuditShot = {
-              seq: data.seq,
-              caption: data.caption ?? "",
-              dimension: data.dimension,
-              image: data.image,
-            };
-            setScreenshots((prev) =>
-              prev.some((s) => s.seq === shot.seq) ? prev : [...prev, shot]
-            );
-          } else if (data.type === "score" && data.total !== undefined) {
-            setScore(data.total);
-            // Wave 2: the run page renders the full breakdown + proxy gate.
-            const q = raw ? `?domain=${encodeURIComponent(raw)}` : "";
-            setTimeout(() => router.push(`/run/${run_id}${q}`), 1500);
-          } else if (data.type === "done") {
-            es.close();
-            setRunning(false);
-          } else if (data.type === "error") {
-            setError("Run failed — check the URL and try again.");
-            es.close();
-            setRunning(false);
-          }
-        } catch {
-          // malformed event, skip
-        }
-      };
-
-      es.onerror = () => {
-        setError("Connection lost. Please try again.");
-        es.close();
-        setRunning(false);
-      };
+      const { run_id } = (await res.json()) as { run_id: string };
+      track("run_started", { domain: raw });
+      router.push(`/run/${run_id}?domain=${encodeURIComponent(raw)}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Something went wrong");
-      setRunning(false);
+      setSubmitting(false);
     }
   }
 
   return (
     <div className="w-full max-w-2xl space-y-4">
-      {/* Domain input */}
-      <form onSubmit={runAudit} className="flex gap-2">
-        <div className="relative flex-1">
-          <span
-            className="absolute left-3 top-1/2 -translate-y-1/2 font-mono text-xs select-none"
-            style={{ color: "var(--muted-foreground)" }}
-          >
-            https://
-          </span>
-          <input
-            type="text"
-            value={domain}
-            onChange={(e) => setDomain(e.target.value)}
-            placeholder="yourproduct.com"
-            disabled={running}
-            className={cn(
-              "h-10 w-full rounded border bg-surface-1 pl-16 pr-3 font-mono text-sm outline-none",
-              "transition-colors duration-100",
-              "focus:border-primary focus:ring-1 focus:ring-primary/40",
-              "placeholder:text-fg-subtle disabled:opacity-60"
-            )}
-            style={{ borderColor: "var(--border)" }}
-          />
-        </div>
-        <CtaButton
-          type="submit"
-          disabled={running || !domain.trim()}
-          size="sm"
+      {/* Domain input — one clean borderless bar */}
+      <form
+        onSubmit={runAudit}
+        className="group flex h-12 items-center gap-2 rounded-lg pl-4 pr-1.5"
+        style={{ background: "var(--surface-1)" }}
+      >
+        <span
+          className="font-mono text-sm select-none"
+          style={{ color: "var(--fg-subtle)" }}
         >
-          {running ? "Running…" : "Test"}
+          https://
+        </span>
+        <input
+          type="text"
+          value={domain}
+          onChange={(e) => setDomain(e.target.value)}
+          placeholder="yourproduct.com"
+          disabled={submitting}
+          autoFocus
+          className={cn(
+            "h-10 flex-1 border-0 bg-transparent font-mono text-sm outline-none",
+            "placeholder:text-fg-subtle disabled:opacity-60"
+          )}
+        />
+        <CtaButton type="submit" disabled={submitting || !domain.trim()} size="sm">
+          {submitting ? "Starting…" : "Test"}
         </CtaButton>
       </form>
+
+      <AccessFields value={access} onChange={setAccess} disabled={submitting} />
+
+      {/* Free-run limit reached → inline upsell (redeem code / checkout) */}
+      {limit !== null && (
+        <RunUpsell
+          token={session?.backendToken}
+          status={limit === true ? null : limit}
+          onRedeemed={() => {
+            setLimit(null);
+            void runAudit({ preventDefault() {} } as React.FormEvent);
+          }}
+        />
+      )}
 
       {/* Error */}
       {error && (
@@ -156,36 +137,6 @@ export function HeroAudit() {
           }}
         >
           {error}
-        </div>
-      )}
-
-      {/* Terminal — only visible once started */}
-      {(lines.length > 0 || running) && (
-        <AuditTerminal
-          domain={domain}
-          lines={lines}
-          score={score}
-          confidence={confidence}
-          screenshots={screenshots}
-          className="w-full"
-        />
-      )}
-
-      {/* Next-action CTA — never leave the user staring at a finished terminal */}
-      {score !== undefined && !running && reportId && (
-        <div className="flex flex-wrap items-center gap-3">
-          <Link
-            href={`/run/${reportId}${domain.trim() ? `?domain=${encodeURIComponent(domain.trim().replace(/^https?:\/\//, "").replace(/\/$/, ""))}` : ""}`}
-            className="group inline-flex items-center gap-1.5 rounded border px-4 py-2 text-sm font-medium transition-colors"
-            style={{
-              borderColor: "var(--border-strong)",
-              background: "var(--surface-1)",
-              color: "var(--foreground)",
-            }}
-          >
-            See the run + generate proxy
-            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-          </Link>
         </div>
       )}
     </div>

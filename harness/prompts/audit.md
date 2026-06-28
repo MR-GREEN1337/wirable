@@ -70,11 +70,11 @@ workflow yields evidence for one or more dimensions:
 - **HTTP**: `curl` and Python `httpx`/`requests` are available for raw endpoint probing.
   Always probe with curl/httpx too — never trust the rendered page alone; the machine
   surface is what an agent sees.
-- **Screenshots**: write to `/screenshots/` (see the screenshot contract below). REQUIRED.
+- **Screenshots**: write to `/tmp/screenshots/` (see the screenshot contract below). REQUIRED.
 - **Time budget**: 15 minutes HARD. Probe broadly, go deep only on the heavy dimensions.
 
 ```bash
-mkdir -p /screenshots
+mkdir -p /tmp/screenshots
 ```
 
 ---
@@ -85,13 +85,13 @@ The backend streams these frames live, so capture as you go, not at the end.
 
 For frame number `N` (zero-padded 4 digits, strictly increasing from `0001`):
 
-1. **Image** → `/screenshots/NNNN.jpg`
+1. **Image** → `/tmp/screenshots/NNNN.jpg`
    - Compressed JPEG, viewport ~1280×800, quality ~60, target **< 150 KB**.
    - Playwright Python:
      ```python
-     page.screenshot(path="/screenshots/0001.jpg", type="jpeg", quality=60)
+     page.screenshot(path="/tmp/screenshots/0001.jpg", type="jpeg", quality=60)
      ```
-2. **Sidecar** → `/screenshots/NNNN.json` written immediately before/with the image:
+2. **Sidecar** → `/tmp/screenshots/NNNN.json` written immediately before/with the image:
    ```json
    {"caption": "Hit /signup — reCAPTCHA v2 iframe blocks the form",
     "dimension": "auth",
@@ -294,7 +294,7 @@ which is about a *programmatic* surface).
 
 ---
 
-## VALIDATE — the second-opinion pass (do this before writing /output.json)
+## VALIDATE — the second-opinion pass (do this before writing /tmp/output.json)
 
 This is the Skyvern-Validator / LLM-judge-calibration step. An actor that grades its own
 work produces false passes ("clicked add-to-cart" but nothing was added) and false fails.
@@ -342,13 +342,13 @@ write**. Optionally capture one final screenshot summarizing the corrected verdi
 - **Be polite & non-destructive:** no aggressive load, no destructive writes against real
   data, obviously-test payloads only.
 - **Run the validate pass before writing.** Do not skip it.
-- **Stop the moment you write `/output.json`.** Do not keep exploring.
+- **Stop the moment you write `/tmp/output.json`.** Do not keep exploring.
 - **15-minute hard cap.** If you run low on time, write the verdict with the evidence you
-  have and honest confidences rather than leaving `/output.json` empty.
+  have and honest confidences rather than leaving `/tmp/output.json` empty.
 
 ---
 
-## OUTPUT CONTRACT — write ONLY this to `/output.json`, then STOP
+## OUTPUT CONTRACT — write ONLY this to `/tmp/output.json`, then STOP
 
 ```json
 {

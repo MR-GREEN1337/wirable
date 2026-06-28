@@ -15,7 +15,9 @@
     "tailwind-merge": "^2.5",
     "clsx": "^2.1",
     "lucide-react": "0.468.0",
-    "@auth/core": "^0.37"
+    "@auth/core": "^0.37",
+    "@sentry/browser": "^8.47.0",
+    "posthog-js": "^1.205.0"
   },
   "devDependencies": {
     "typescript": "^5",

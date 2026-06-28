@@ -17,6 +17,12 @@ class Audit(Base):
     company_id: Mapped[uuid.UUID] = mapped_column(
         PG_UUID(as_uuid=True), ForeignKey("companies.id", ondelete="CASCADE"), nullable=False, index=True
     )
+    # Who ran this test. Nullable for pre-existing rows + anonymous runs. Added
+    # migration-free via ALTER ... ADD COLUMN IF NOT EXISTS (see run.py). The
+    # dashboard lists a user's targets by this column.
+    user_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        PG_UUID(as_uuid=True), nullable=True, index=True
+    )
     score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     confidence: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     n_agents: Mapped[int] = mapped_column(Integer, default=3, nullable=False)

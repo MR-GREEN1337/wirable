@@ -39,8 +39,11 @@ EVENT_TYPES: tuple[str, ...] = (
     "tool_call",
     "workflow_result",
     "score",
+    "proxy_tool",
     "proxy_ready",
+    "fix_pr",
     "verify",
+    "needs_input",
     "done",
     "error",
 )
@@ -66,11 +69,17 @@ class events:
         return {"type": "line", "ok": ok, "msg": msg}
 
     @staticmethod
-    def screenshot(seq: int, caption: str, dimension: str, image: str) -> dict:
+    def screenshot(
+        seq: int, caption: str, dimension: str, image: str, agent: int = 0
+    ) -> dict:
         # image is a "data:image/jpeg;base64,..." data URL.
+        # `agent` (0..N-1) tags which parallel CATTS agent produced the frame so
+        # the frontend can render one live tile per agent. Defaults to 0 for
+        # back-compat with any single-agent producer.
         return {
             "type": "screenshot",
             "seq": seq,
+            "agent": agent,
             "caption": caption,
             "dimension": dimension,
             "image": image,
@@ -113,6 +122,26 @@ class events:
         return {"type": "score", "total": total, "dimensions": dimensions}
 
     @staticmethod
+    def proxy_tool(
+        name: str,
+        *,
+        method: Optional[str] = None,
+        path: Optional[str] = None,
+        kind: str = "http",
+    ) -> dict:
+        # Emitted once per tool as the generator maps it, so the build stream can
+        # materialize the proxy's tool list one row at a time as it's built.
+        #   method/path describe the upstream operation (e.g. POST /v1/customers);
+        #   kind is the action type ("http" | "playwright").
+        return {
+            "type": "proxy_tool",
+            "name": name,
+            "method": method,
+            "path": path,
+            "kind": kind,
+        }
+
+    @staticmethod
     def proxy_ready(mcp_url: str, tools: list[dict], advertise: dict) -> dict:
         # tools: [{"name": str, "description": str}, ...]
         # advertise: {"well_known": dict, "llms_txt": str, "link_tag": str, "header": str}
@@ -124,12 +153,50 @@ class events:
         }
 
     @staticmethod
+    def fix_pr(
+        pr_url: str,
+        files: list[str],
+        *,
+        branch: Optional[str] = None,
+        repo: Optional[str] = None,
+        diff: Optional[str] = None,
+        error: Optional[str] = None,
+    ) -> dict:
+        # Emitted after the FIX flow opens a PR on the user's connected repo.
+        # On failure, pr_url is "" and `error` carries the reason.
+        # `diff` is the unified diff of the agent-ready changes (capped); omitted
+        # when unavailable (e.g. the REST file-drop fallback) so the UI degrades.
+        return {
+            "type": "fix_pr",
+            "pr_url": pr_url,
+            "files": files,
+            "branch": branch,
+            "repo": repo,
+            "diff": diff,
+            "error": error,
+        }
+
+    @staticmethod
     def verify(before: int, after: int) -> dict:
         return {
             "type": "verify",
             "before": before,
             "after": after,
             "delta": after - before,
+        }
+
+    @staticmethod
+    def needs_input(prompt: str, kind: str, request_id: str) -> dict:
+        # Emitted when the in-sandbox agent is blocked and asks the human for a
+        # value (an OTP, a credential, or free text). The frontend renders an
+        # input affordance and POSTs the answer to /run/{run_id}/input, which the
+        # camera loop relays into the sandbox so the agent resumes.
+        #   kind: "otp" | "credential" | "text"
+        return {
+            "type": "needs_input",
+            "prompt": prompt,
+            "kind": kind,
+            "request_id": request_id,
         }
 
     @staticmethod

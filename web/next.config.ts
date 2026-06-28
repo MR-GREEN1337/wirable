@@ -8,8 +8,11 @@ const PROXY_TARGET = process.env.BACKEND_URL || "http://localhost:8000";
 const nextConfig: NextConfig = {
   output: "standalone",
   async rewrites() {
+    // ONLY proxy the backend API (/api/v1/*). Must NOT catch /api/auth/* —
+    // those are NextAuth's own routes (providers/callback/session); proxying
+    // them to the backend 404s and breaks guest + Google sign-in.
     return [
-      { source: "/api/:path*", destination: `${PROXY_TARGET}/api/:path*` },
+      { source: "/api/v1/:path*", destination: `${PROXY_TARGET}/api/v1/:path*` },
     ];
   },
   async headers() {

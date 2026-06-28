@@ -21,6 +21,8 @@ dependencies = [
     "daytona==0.179.0",
     "daytona-api-client==0.179.0",
     "daytona-api-client-async==0.179.0",
+    "sentry-sdk[fastapi]>=2.20,<3",
+    "stripe>=11,<13",
 ]
 
 [tool.uv]

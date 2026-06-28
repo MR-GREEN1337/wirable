@@ -11,6 +11,9 @@ export type TerminalLine = {
 
 export type AuditShot = {
   seq: number;
+  // Which parallel agent produced this frame (0..N-1); defaults to 0 for
+  // legacy single-agent frames. Frames are de-duped by `${agent}:${seq}`.
+  agent?: number;
   caption: string;
   dimension?: string;
   url?: string;
@@ -280,12 +283,31 @@ export function AuditTerminal({
   // null = follow latest; number = pinned to a specific frame
   const [pinned, setPinned] = useState<number | null>(null);
 
+  // Narrate the sandbox cold-boot instead of a static "awaiting frame".
+  const [bootIdx, setBootIdx] = useState(0);
+  const BOOT_PHASES = [
+    "configuring sandbox",
+    "installing agent runtime",
+    "launching headless browser",
+    "warming up the agent",
+    "opening the target site",
+  ];
+  useEffect(() => {
+    if (screenshots.length > 0) return;
+    const t = setInterval(() => setBootIdx((n) => (n + 1) % BOOT_PHASES.length), 2200);
+    return () => clearInterval(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screenshots.length]);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [lines.length]);
 
   const isRunning = lines.length > 0 && score === undefined;
   const hasShots = screenshots.length > 0;
+  // Viewport-only mode: caller drives the log elsewhere (the run page's
+  // ActivityStream). Render just the browser stage + filmstrip.
+  const viewportOnly = lines.length === 0 && score === undefined;
 
   // Sorted by seq so the "latest" is deterministic
   const ordered = [...screenshots].sort((a, b) => a.seq - b.seq);
@@ -294,6 +316,44 @@ export function AuditTerminal({
     pinned !== null
       ? ordered.find((s) => s.seq === pinned) ?? latest
       : latest;
+
+  // ── Viewport-only: just the browser stage (run page composes the log) ──
+  if (viewportOnly) {
+    return (
+      <div
+        className={cn("flex flex-col overflow-hidden rounded-md border font-mono text-xs", className)}
+        style={{ background: "var(--t-bg)", borderColor: "var(--t-border)" }}
+      >
+        {active ? (
+          <>
+            <BrowserViewport shot={active} live={pinned === null} />
+            <Filmstrip shots={ordered} activeSeq={active.seq} onPick={setPinned} />
+          </>
+        ) : (
+          <div
+            className="flex flex-1 flex-col items-center justify-center gap-2.5 px-6 py-12 text-center"
+            style={{ minHeight: 280 }}
+          >
+            <span
+              className="inline-flex h-7 w-7 items-center justify-center rounded-full border"
+              style={{ borderColor: "var(--t-border)", color: "var(--t-muted)" }}
+            >
+              <span
+                className="h-3.5 w-3.5 rounded-full border-2 border-current border-t-transparent"
+                style={{ animation: "spinner 0.9s linear infinite" }}
+              />
+            </span>
+            <span className="text-[11px]" style={{ color: "var(--t-muted)" }}>
+              {BOOT_PHASES[bootIdx]}…
+            </span>
+            <span className="font-mono text-[10px]" style={{ color: "var(--t-muted)", opacity: 0.7 }}>
+              {domain || "<domain>"}
+            </span>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -340,7 +400,7 @@ export function AuditTerminal({
               className={cn("text-[11px]", !hasShots && "ml-2")}
               style={{ color: "var(--t-muted)" }}
             >
-              wirable — {domain || "awaiting domain"}
+              wirable · {domain || "awaiting domain"}
             </span>
             {isRunning && (
               <span

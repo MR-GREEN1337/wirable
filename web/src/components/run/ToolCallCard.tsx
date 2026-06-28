@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { ChevronRight } from "lucide-react";
 import type { NormalizedEnvelope } from "@/lib/run-events";
+import { toolConcept } from "@/lib/run-icons";
 
 export type ToolCall = {
   name: string;
@@ -36,7 +37,6 @@ function pretty(value: unknown): string {
 function CodeBlock({ label, value }: { label: string; value: unknown }) {
   const raw = pretty(value);
   const isHtml = typeof value === "string" && looksLikeHtml(value);
-  // Never render raw HTML; show a compact, capped, monospace preview instead.
   const body = isHtml
     ? `[HTML response · ${value.length.toLocaleString()} chars hidden]`
     : raw.length > MAX_CHARS
@@ -64,34 +64,53 @@ function CodeBlock({ label, value }: { label: string; value: unknown }) {
   );
 }
 
-function EnvelopePill({ env }: { env: NormalizedEnvelope }) {
-  const color = env.success ? "var(--t-green)" : "var(--t-red)";
+/* ── Normalized envelope — three labeled pills ────────────────────────────────*/
+
+function Pill({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: string;
+  color: string;
+}) {
   return (
     <div
-      className="rounded px-2 py-1.5"
-      style={{ background: "var(--t-s1)", border: `1px solid ${color}` }}
+      className="flex items-center justify-between gap-2 rounded px-2 py-1"
+      style={{ background: "var(--t-bg)", border: "1px solid var(--t-border)" }}
     >
-      <div className="flex items-center gap-2">
-        <span
-          className="data text-[11px] font-semibold uppercase tracking-[0.08em]"
-          style={{ color }}
-        >
-          {env.success ? "success" : "fail"}
-        </span>
-        {env.retryable && (
-          <span
-            className="data rounded px-1 text-[9px] uppercase tracking-[0.08em]"
-            style={{ color: "var(--t-amber)", border: "1px solid var(--t-amber)" }}
-          >
-            retryable
-          </span>
-        )}
+      <span className="text-[9px] uppercase tracking-[0.08em]" style={{ color: "var(--t-muted)" }}>
+        {label}
+      </span>
+      <span className="data text-[11px] font-semibold" style={{ color }}>
+        {value}
+      </span>
+    </div>
+  );
+}
+
+function Envelope({ env }: { env: NormalizedEnvelope }) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="eyebrow text-[10px]" style={{ color: "var(--t-muted)" }}>
+        normalized envelope
       </div>
-      {env.error_code && (
-        <div className="mt-1 font-mono text-[10px]" style={{ color: "var(--t-muted)" }}>
-          code: <span style={{ color: "var(--t-fg)" }}>{env.error_code}</span>
-        </div>
-      )}
+      <Pill
+        label="success"
+        value={env.success ? "true" : "false"}
+        color={env.success ? "var(--t-green)" : "var(--t-red)"}
+      />
+      <Pill
+        label="error_code"
+        value={env.error_code ?? "null"}
+        color={env.error_code ? "var(--t-amber)" : "var(--t-muted)"}
+      />
+      <Pill
+        label="retryable"
+        value={env.retryable ? "true" : "false"}
+        color={env.retryable ? "var(--t-amber)" : "var(--t-muted)"}
+      />
     </div>
   );
 }
@@ -99,60 +118,71 @@ function EnvelopePill({ env }: { env: NormalizedEnvelope }) {
 export function ToolCallCard({ call }: { call: ToolCall }) {
   const [open, setOpen] = useState(false);
   const env = call.normalized;
-  const accent = env.success ? "var(--t-green)" : "var(--t-red)";
+  const concept = toolConcept(call.name);
+  const Icon = concept.icon;
+  const statusColor = env.success ? "var(--t-green)" : "var(--t-red)";
 
   return (
     <div
-      className="overflow-hidden rounded border font-mono"
-      style={{ borderColor: "var(--t-border)", background: "var(--t-s1)" }}
+      className="overflow-hidden rounded-md border font-mono transition-colors duration-[80ms]"
+      style={{
+        borderColor: open ? "var(--t-border)" : "var(--t-border)",
+        background: "var(--t-s1)",
+      }}
     >
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="flex w-full items-center gap-2 px-3 py-2 text-left"
+        className="flex w-full items-center gap-2.5 px-3 py-2 text-left"
       >
         <ChevronRight
-          className="h-3.5 w-3.5 shrink-0 transition-transform"
+          className="h-3.5 w-3.5 shrink-0 transition-transform duration-200"
           style={{
             color: "var(--t-muted)",
             transform: open ? "rotate(90deg)" : "none",
           }}
         />
         <span
-          className="h-1.5 w-1.5 shrink-0 rounded-full"
-          style={{ background: accent }}
-        />
-        <span className="truncate text-[12px]" style={{ color: "var(--t-fg)" }}>
+          className="flex h-6 w-6 shrink-0 items-center justify-center rounded"
+          style={{
+            color: concept.accent,
+            border: `1px solid ${concept.accent}`,
+            background: "var(--t-bg)",
+          }}
+        >
+          <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+        </span>
+        <span className="min-w-0 flex-1 truncate text-[12px]" style={{ color: "var(--t-fg)" }}>
           {call.name}
         </span>
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: statusColor }} />
         <span
-          className="data ml-auto shrink-0 text-[10px] uppercase tracking-[0.08em]"
-          style={{ color: accent }}
+          className="data shrink-0 text-[10px] uppercase tracking-[0.08em]"
+          style={{ color: statusColor }}
         >
           {env.success ? "ok" : env.error_code ?? "fail"}
         </span>
       </button>
 
-      {open && (
-        <div
-          className="flex flex-col gap-3 border-t px-3 py-3"
-          style={{ borderColor: "var(--t-border)" }}
-        >
-          <CodeBlock label="request" value={call.request} />
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <CodeBlock label="raw response" value={call.response} />
-            <div className="sm:w-44">
-              <div
-                className="eyebrow mb-1 text-[10px]"
-                style={{ color: "var(--t-muted)" }}
-              >
-                normalized
+      <div
+        className="grid transition-[grid-template-rows] duration-200 ease-out"
+        style={{ gridTemplateRows: open ? "1fr" : "0fr" }}
+      >
+        <div className="overflow-hidden">
+          <div
+            className="flex flex-col gap-3 border-t px-3 py-3"
+            style={{ borderColor: "var(--t-border)" }}
+          >
+            <CodeBlock label="request" value={call.request} />
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <CodeBlock label="raw response" value={call.response} />
+              <div className="sm:w-48">
+                <Envelope env={env} />
               </div>
-              <EnvelopePill env={env} />
             </div>
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }

@@ -15,6 +15,9 @@ Workflow diagram:
 """
 from __future__ import annotations
 
+import asyncio
+import socket
+
 import httpx
 from loguru import logger
 
@@ -85,12 +88,17 @@ async def _recon(run_id: str, url: str) -> dict:
     return {"found": found, "kind": kind, "evidence": evidence}
 
 
-async def run_workflow(run_id: str, url: str) -> dict:
+async def run_workflow(run_id: str, url: str, access: dict | None = None) -> dict:
     """Drive recon -> classify -> test -> score, emitting canonical SSE events.
 
     Stops after `score` (proxy generation is gated). Always terminates the SSE
     stream with `done` (or `error` on a hard failure). Returns the aggregated
     score dict from the test engine.
+
+    `access` (optional) is the human-in-the-loop credential grant from POST /run
+    ({mode, email, password, api_key, token, notes}). When present it is threaded
+    to test_service.run_test, which injects it into the sandbox so the agent can
+    sign in and exercise the AUTHED product.
     """
     url = _normalize_url(url)
     if not url:
@@ -98,6 +106,31 @@ async def run_workflow(run_id: str, url: str) -> dict:
         return {}
 
     domain = _domain_of(url)
+    host = domain.split(":")[0]
+
+    # --- pre-flight reachability ---------------------------------------------
+    # If the host doesn't resolve at all (NXDOMAIN/SERVFAIL), there's nothing to
+    # audit. Fail fast with a clear message instead of spawning 3 sandboxes that
+    # screenshot a blank DNS-error page and return a silent 0.
+    resolved = False
+    for port in (443, 80):
+        try:
+            await asyncio.to_thread(socket.getaddrinfo, host, port)
+            resolved = True
+            break
+        except Exception:
+            continue
+    if not resolved:
+        await test_service.emit(
+            run_id, events.line(False, f"could not resolve {host} — DNS lookup failed")
+        )
+        await test_service.emit(
+            run_id,
+            events.error(
+                f"Could not reach {host}. The domain did not resolve — check the URL and try again."
+            ),
+        )
+        return {}
 
     try:
         # --- recon -----------------------------------------------------------
@@ -127,7 +160,7 @@ async def run_workflow(run_id: str, url: str) -> dict:
             )
 
         agg = await test_service.run_test(
-            domain, run_id, report_id=None, emit_done=False
+            domain, run_id, report_id=None, emit_done=False, access=access
         )
         await test_service.emit(run_id, events.phase("test", "done"))
 

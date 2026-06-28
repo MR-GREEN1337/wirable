@@ -31,6 +31,17 @@ export type ScoreDimension = {
   evidence: string;
 };
 
+export type CardTone = "good" | "bad" | "warn";
+
+// A "Wrapped"-style insight card — the narrative payload of the report.
+export type WrappedCardData = {
+  eyebrow: string; // a short question
+  headline: string; // bold verdict, ≤5 words
+  detail: string; // one specific evidence sentence
+  dimension: string; // api_surface | auth | ... | general
+  tone: CardTone;
+};
+
 export type AdvertiseBundle = {
   well_known: Record<string, unknown>;
   llms_txt: string;
@@ -51,6 +62,10 @@ export type RunEvent =
   | {
       type: "screenshot";
       seq: number;
+      // Which parallel CATTS agent produced this frame (0..N-1). Absent on
+      // legacy single-agent events → treated as agent 0. seqs are per-agent, so
+      // consumers must key by `${agent}:${seq}` to avoid cross-agent collisions.
+      agent?: number;
       caption: string;
       dimension?: string;
       image: string;
@@ -68,7 +83,22 @@ export type RunEvent =
       passed: boolean;
       evidence: string;
     }
-  | { type: "score"; total: number; dimensions: ScoreDimension[] }
+  | { type: "cards"; cards: WrappedCardData[] }
+  | {
+      type: "score";
+      total: number;
+      dimensions: ScoreDimension[];
+      cards?: WrappedCardData[];
+    }
+  // Emitted once per tool as the generator maps it during proxy build, so the
+  // build stream can materialize the toolset one row at a time.
+  | {
+      type: "proxy_tool";
+      name: string;
+      method?: string | null;
+      path?: string | null;
+      kind?: string;
+    }
   | {
       type: "proxy_ready";
       mcp_url: string;
@@ -76,6 +106,20 @@ export type RunEvent =
       advertise: AdvertiseBundle;
     }
   | { type: "verify"; before: number; after: number; delta: number }
+  | {
+      type: "fix_pr";
+      pr_url: string;
+      files: string[];
+      branch?: string | null;
+      repo?: string | null;
+      // Unified diff of the agent-ready changes the PR contains (capped).
+      // Omitted for the REST file-drop fallback.
+      diff?: string | null;
+      error?: string | null;
+    }
+  // The agent paused mid-run and needs a value from the human (e.g. an OTP).
+  // Cleared on the resume `line` ("human input received…") or on done/error.
+  | { type: "needs_input"; prompt: string; kind?: string; request_id: string }
   | { type: "done" }
   | { type: "error"; msg: string };
 

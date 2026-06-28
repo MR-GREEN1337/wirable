@@ -1,0 +1,13 @@
+<svg width="80" height="80" viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Wirable">
+  <rect x="1" y="1" width="78" height="78" rx="18" fill="#0c0f14" stroke="#1c2230" stroke-width="1.5"/>
+  <!-- the wire: a W traced as one continuous patch cable -->
+  <path d="M22 24 L34 56 L40 38 L46 56 L58 24" stroke="#e7ecf3" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round" opacity="0.92"/>
+  <!-- ports -->
+  <circle cx="22" cy="24" r="3.4" fill="#0c0f14" stroke="#e7ecf3" stroke-width="2.2"/>
+  <circle cx="58" cy="24" r="3.4" fill="#0c0f14" stroke="#e7ecf3" stroke-width="2.2"/>
+  <circle cx="34" cy="56" r="3.4" fill="#0c0f14" stroke="#e7ecf3" stroke-width="2.2"/>
+  <circle cx="46" cy="56" r="3.4" fill="#0c0f14" stroke="#e7ecf3" stroke-width="2.2"/>
+  <!-- the live agent connection: the one ciel-bleu accent -->
+  <circle cx="40" cy="38" r="11.5" fill="none" stroke="#3b9bff" stroke-width="1.6" opacity="0.32"/>
+  <circle cx="40" cy="38" r="5" fill="#3b9bff"/>
+</svg>

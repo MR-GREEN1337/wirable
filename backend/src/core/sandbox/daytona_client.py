@@ -37,7 +37,7 @@ from ...core.llm import key_pool
 # Image baked in harness/Dockerfile and pushed to a registry before the demo.
 # Fallback: official python-dev snapshot in Daytona cloud.
 HARNESS_IMAGE = "agentready-harness:latest"
-FALLBACK_SNAPSHOT = "python"
+FALLBACK_SNAPSHOT = "daytonaio/sandbox:0.8.0"
 
 
 def _resolve_image() -> str:
@@ -106,12 +106,12 @@ class SandboxHandle:
             try:
                 info = await self._sb.process.get_session_command(self._session, cmd_id)
             except Exception as e:  # transient — keep polling until deadline
-                logger.debug("get_session_command poll failed: %s", e)
+                logger.debug("get_session_command poll failed: {}", e)
                 info = None
             if info is not None and getattr(info, "exit_code", None) is not None:
                 break
             if asyncio.get_running_loop().time() > deadline:
-                logger.warning("sandbox exec timed out after %ds: %s", timeout, command[:80])
+                logger.warning("sandbox exec timed out after {}s: {}", timeout, command[:80])
                 break
             await asyncio.sleep(2)
 
@@ -255,31 +255,33 @@ class DaytonaClient:
         sandbox = None
         session_id = f"ar-{uuid.uuid4().hex[:8]}"
 
+        from daytona import CreateSandboxFromSnapshotParams
+
+        # Primary: our prebuilt Daytona snapshot (agent-browser + Chrome + python
+        # baked in — see scripts/build_snapshot.py). Fallback: the stock sandbox.
+        snapshot_name = os.getenv("AGENTREADY_SANDBOX_IMAGE") or "wirable-agent"
         try:
+            # --- create: primary snapshot, fall back to the stock sandbox ---
             try:
-                params = CreateSandboxFromImageParams(
-                    image=_resolve_image(),
+                params = CreateSandboxFromSnapshotParams(
+                    snapshot=snapshot_name,
                     auto_stop_interval=_AUTOSTOP_MINUTES,
                 )
-                sandbox = await client.create(params)
-                logger.debug("Daytona sandbox created from harness image: %s", sandbox.id)
-            except Exception as image_err:
-                logger.warning("Harness image unavailable (%s), falling back to %s", image_err, FALLBACK_SNAPSHOT)
-                from daytona import CreateSandboxFromSnapshotParams
+                sandbox = await client.create(params, timeout=180)  # wait until RUNNING
+                logger.debug("Daytona sandbox from snapshot %s: %s", snapshot_name, sandbox.id)
+            except Exception as snap_err:
+                logger.warning("Snapshot %s unavailable (%s), falling back to %s", snapshot_name, snap_err, FALLBACK_SNAPSHOT)
                 params = CreateSandboxFromSnapshotParams(
                     snapshot=FALLBACK_SNAPSHOT,
                     auto_stop_interval=_AUTOSTOP_MINUTES,
                 )
-                sandbox = await client.create(params)
+                sandbox = await client.create(params, timeout=180)  # wait until RUNNING
 
-            # Create a persistent shell session
+            # --- runs for EITHER create path (was wrongly nested under except) ---
             await sandbox.process.create_session(session_id)
 
-            # Pre-install OpenCode if not baked into the image, and best-effort
-            # write a minimal OpenCode config pointing at the Anthropic provider
-            # + chosen model so `opencode run` uses Claude. The exported
-            # ANTHROPIC_API_KEY/ANTHROPIC_MODEL (prepended to every exec) is the
-            # primary mechanism; the config file is a defensive fallback.
+            # Best-effort OpenCode setup (only used by the fix flow; the audit
+            # driver uses agent-browser, already baked into the snapshot).
             setup_cmd = (
                 "which opencode || npm install -g opencode-ai@latest -q 2>/dev/null || true"
             )
@@ -312,3 +314,9 @@ class DaytonaClient:
                     logger.debug("Daytona sandbox deleted: %s", sandbox.id)
                 except Exception as e:
                     logger.warning("Failed to delete sandbox: %s", e)
+            # Always close the client — it owns an aiohttp ClientSession that
+            # otherwise leaks once per run ("Unclosed client session" in Sentry).
+            try:
+                await client.close()
+            except Exception as e:
+                logger.debug("Daytona client close failed: %s", e)

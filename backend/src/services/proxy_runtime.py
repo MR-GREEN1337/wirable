@@ -61,6 +61,24 @@ _IDEM_TTL_S = 600
 # Upstream HTTP call timeout for the http action dispatcher.
 _HTTP_TIMEOUT_S = 20.0
 
+# MCP protocol versions we know how to speak (Streamable HTTP transport).
+# We echo back the client's requested version when it's one of these; otherwise
+# we fall back to our default. 2025-06-18 is the current spec revision.
+MCP_PROTOCOL_VERSION = "2025-06-18"
+_SUPPORTED_PROTOCOL_VERSIONS = {
+    "2025-06-18",
+    "2025-03-26",
+    "2024-11-05",
+}
+SERVER_VERSION = "1.0.0"
+
+
+def negotiate_protocol_version(requested: Optional[str]) -> str:
+    """Echo back the client's protocolVersion when we know it, else our default."""
+    if isinstance(requested, str) and requested in _SUPPORTED_PROTOCOL_VERSIONS:
+        return requested
+    return MCP_PROTOCOL_VERSION
+
 
 # ---------------------------------------------------------------------------
 # proxy_id helper — proxy_id is the run_id (a uuid string).
@@ -304,6 +322,37 @@ class ProxyRuntime:
         self.config = config
         self.evals = evals or {}
         self.broker = AuthBroker(self.evals)
+
+    # -- MCP server identity ----------------------------------------------
+    def server_name(self) -> str:
+        """A stable, human-readable server name for serverInfo."""
+        domain = None
+        try:
+            base = self.config.base_url or ""
+            if base:
+                from urllib.parse import urlparse
+
+                domain = urlparse(base).netloc or base
+        except Exception:
+            domain = None
+        return f"wirable-proxy:{domain or self.proxy_id}"
+
+    def requires_auth(self) -> bool:
+        """Whether this proxy enforces a scoped agent key on tools/call.
+
+        A proxy is protected once the owner has minted at least one scoped key.
+        With no keys issued, the endpoint stays open (current/demo behavior).
+        """
+        keys = self.evals.get("keys") or {}
+        return bool(keys)
+
+    def initialize_result(self, requested_version: Optional[str]) -> dict:
+        """The MCP `initialize` result (capabilities + serverInfo)."""
+        return {
+            "protocolVersion": negotiate_protocol_version(requested_version),
+            "capabilities": {"tools": {"listChanged": False}},
+            "serverInfo": {"name": self.server_name(), "version": SERVER_VERSION},
+        }
 
     # -- tool lookup ------------------------------------------------------
     def _tool(self, name: str) -> Optional[ProxyTool]:
@@ -690,3 +739,121 @@ def mcp_url_for(proxy_id: str) -> str:
     base = (settings.APP_BASE_URL or "").rstrip("/")
     path = f"/api/v1/proxy/{proxy_id}/mcp"
     return base + path if base else path
+
+
+# ---------------------------------------------------------------------------
+# Public directory / registry — every product with a live hosted proxy.
+# ---------------------------------------------------------------------------
+
+def _is_self_or_test_domain(domain: str) -> bool:
+    """True for domains we never want in the public directory: Wirable's own
+    infra, the box IP / sslip.io fallbacks, and localhost/test placeholders."""
+    d = (domain or "").lower().strip()
+    if not d:
+        return True
+    # Strip scheme/path if a full URL slipped in.
+    d = d.replace("https://", "").replace("http://", "").split("/")[0]
+    BAD_SUBSTR = (
+        "wirable.dev", "sslip.io", "5.161.110.99", "localhost",
+        "127.0.0.1", "0.0.0.0", "example.com", "test", "::1",
+    )
+    return any(s in d for s in BAD_SUBSTR)
+
+
+async def list_public_registry() -> list[dict]:
+    """Return the public directory of live hosted proxies.
+
+    Shape: [{domain, score, mcp_url, tool_count}]. Joins each hosted MCP row to
+    its company (for the domain + score). Hygiene: excludes self/test domains,
+    requires a real score, dedups by domain (newest wins), and always builds the
+    canonical https mcp_url (never the stale http://IP:3001). Fully defensive —
+    never raises; on any error returns whatever was collected so far (or []).
+    """
+    from sqlalchemy import select
+
+    from ..models.company import Company
+
+    out: list[dict] = []
+    seen_domains: set[str] = set()
+    try:
+        async with AsyncSessionLocal() as db:
+            # Only proxies that have actually been hosted carry pr_status="hosted".
+            res = await db.execute(
+                select(MCP).where(MCP.pr_status.in_(("hosted", "verified")))
+                .order_by(MCP.created_at.desc())
+            )
+            rows = res.scalars().all()
+
+            # Resolve company per client in a small cache to avoid N+1 explosions.
+            company_by_client: dict = {}
+
+            for row in rows:
+                try:
+                    cfg = row.schemas_json if isinstance(row.schemas_json, dict) else {}
+                    tools = cfg.get("tools") or []
+                    if not tools:
+                        # No tools => not a usable proxy; skip.
+                        continue
+                    # Always build the canonical https url from APP_BASE_URL —
+                    # never trust the persisted value (old rows carry the stale
+                    # http://5.161.110.99:3001 host from before wirable.dev).
+                    mcp_url = mcp_url_for(str(row.id))
+
+                    # Domain + score: prefer the linked company, fall back to base_url.
+                    domain = None
+                    score = None
+                    cid = row.client_id
+                    company = company_by_client.get(cid, "__miss__")
+                    if company == "__miss__":
+                        company = None
+                        try:
+                            cres = await db.execute(
+                                select(Company)
+                                .join(Client, Client.company_id == Company.id)
+                                .where(Client.id == cid)
+                            )
+                            company = cres.scalars().first()
+                        except Exception:
+                            company = None
+                        company_by_client[cid] = company
+                    if company is not None:
+                        domain = company.domain
+                        score = company.score
+                    if not domain:
+                        base = cfg.get("base_url") or ""
+                        if base:
+                            try:
+                                from urllib.parse import urlparse
+
+                                domain = urlparse(base).netloc or base
+                            except Exception:
+                                domain = base
+                    if score is None and isinstance(row.projected_score, int):
+                        score = row.projected_score
+
+                    if not domain or _is_self_or_test_domain(domain):
+                        continue
+                    # Require a real score — a directory entry with no grade
+                    # looks broken to a visitor.
+                    if not isinstance(score, int):
+                        continue
+                    # Dedup by domain; rows are newest-first so first wins.
+                    dkey = domain.lower().strip()
+                    if dkey in seen_domains:
+                        continue
+                    seen_domains.add(dkey)
+
+                    out.append(
+                        {
+                            "domain": domain,
+                            "score": score,
+                            "mcp_url": mcp_url,
+                            "tool_count": len(tools),
+                        }
+                    )
+                except Exception:
+                    logger.debug("registry row skipped for %s", getattr(row, "id", "?"))
+                    continue
+    except Exception:
+        logger.exception("list_public_registry failed")
+    return out

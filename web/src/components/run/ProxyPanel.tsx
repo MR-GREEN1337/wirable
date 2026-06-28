@@ -1,8 +1,32 @@
 "use client";
 
 import { useState } from "react";
-import { Copy, Check, KeyRound, Server } from "lucide-react";
+import { Copy, Check, KeyRound, Boxes } from "lucide-react";
 import { BACKEND_URL, type AdvertiseBundle, type ProxyTool } from "@/lib/run-events";
+import { McpMonitor } from "./McpMonitor";
+import { mcpSlug, mcpConfigJson, cursorDeepLink } from "@/lib/mcp-install";
+
+/** A distinctive small MCP mark — three connected nodes (a tool graph). */
+function McpBadge() {
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em]"
+      style={{
+        color: "var(--primary)",
+        border: "1px solid var(--primary)",
+        background: "var(--primary-soft)",
+      }}
+    >
+      <svg width="11" height="11" viewBox="0 0 12 12" fill="none" aria-hidden>
+        <circle cx="6" cy="2.2" r="1.6" fill="currentColor" />
+        <circle cx="2.4" cy="9" r="1.6" fill="currentColor" />
+        <circle cx="9.6" cy="9" r="1.6" fill="currentColor" />
+        <path d="M6 2.2 2.4 9M6 2.2 9.6 9M2.4 9h7.2" stroke="currentColor" strokeWidth="0.9" strokeLinecap="round" />
+      </svg>
+      MCP
+    </span>
+  );
+}
 
 interface ProxyPanelProps {
   proxyId: string;
@@ -90,12 +114,24 @@ export function ProxyPanel({ proxyId, mcpUrl, tools, advertise }: ProxyPanelProp
       }}
     >
       <div
-        className="flex items-center gap-2 border-b px-4 py-3"
+        className="flex items-center gap-2.5 border-b px-4 py-3"
         style={{ borderColor: "var(--border)" }}
       >
-        <Server className="h-4 w-4" style={{ color: "var(--primary)" }} />
+        <McpBadge />
         <span className="eyebrow" style={{ color: "var(--primary)" }}>
           proxy live
+        </span>
+        <span className="ml-auto inline-flex items-center gap-1.5">
+          <span
+            className="h-1.5 w-1.5 rounded-full"
+            style={{ background: "var(--success)" }}
+          />
+          <span
+            className="data text-[10px] uppercase tracking-[0.08em]"
+            style={{ color: "var(--success)" }}
+          >
+            hosted
+          </span>
         </span>
       </div>
 
@@ -116,15 +152,54 @@ export function ProxyPanel({ proxyId, mcpUrl, tools, advertise }: ProxyPanelProp
         </div>
       </div>
 
+      {/* Use this MCP — one-click adoption */}
+      <div className="border-t px-4 py-3" style={{ borderColor: "var(--border)" }}>
+        <div className="eyebrow mb-2 text-[10px]">use this mcp</div>
+        <div className="flex flex-wrap items-center gap-2">
+          <a
+            href={cursorDeepLink(mcpUrl, mcpSlug(mcpUrl))}
+            className="cn-hover inline-flex items-center gap-1.5 rounded px-3 py-1.5 text-[12px] font-semibold"
+            style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
+          >
+            Add to Cursor
+          </a>
+          <CopyButton value={mcpConfigJson(mcpUrl, mcpSlug(mcpUrl))} />
+          <span className="text-[11px]" style={{ color: "var(--fg-subtle)" }}>
+            copy the config for Claude Desktop / any MCP client
+          </span>
+        </div>
+        <pre
+          className="scrollbar-minimal mt-2 max-h-40 overflow-auto rounded px-3 py-2.5 font-mono text-[11px] leading-relaxed"
+          style={{
+            background: "var(--t-bg)",
+            border: "1px solid var(--t-border)",
+            color: "var(--t-fg)",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-word",
+          }}
+        >
+          {mcpConfigJson(mcpUrl, mcpSlug(mcpUrl))}
+        </pre>
+      </div>
+
       {/* Tools */}
       {tools.length > 0 && (
         <div className="border-t px-4 py-3" style={{ borderColor: "var(--border)" }}>
           <div className="eyebrow mb-2 text-[10px]">
             generated tools · {tools.length}
           </div>
-          <ul className="flex flex-col gap-1.5">
+          <ul className="flex flex-col gap-1">
             {tools.map((t) => (
-              <li key={t.name} className="flex items-baseline gap-2">
+              <li
+                key={t.name}
+                className="flex items-center gap-2.5 rounded px-2 py-1.5"
+                style={{ background: "var(--surface-2)" }}
+              >
+                <Boxes
+                  className="h-3.5 w-3.5 shrink-0"
+                  style={{ color: "var(--primary)" }}
+                  strokeWidth={1.75}
+                />
                 <code
                   className="shrink-0 font-mono text-[12px]"
                   style={{ color: "var(--primary)" }}
@@ -132,8 +207,9 @@ export function ProxyPanel({ proxyId, mcpUrl, tools, advertise }: ProxyPanelProp
                   {t.name}
                 </code>
                 <span
-                  className="truncate text-[12px]"
+                  className="min-w-0 flex-1 truncate text-[12px]"
                   style={{ color: "var(--muted-foreground)" }}
+                  title={t.description}
                 >
                   {t.description}
                 </span>
@@ -229,6 +305,9 @@ export function ProxyPanel({ proxyId, mcpUrl, tools, advertise }: ProxyPanelProp
           </div>
         )}
       </div>
+
+      {/* MCP drift monitoring */}
+      <McpMonitor />
     </div>
   );
 }

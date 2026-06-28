@@ -1,64 +1,61 @@
 import { Reveal } from "@/components/Reveal";
 import { CtaButton } from "@/components/CtaButton";
+import { GlassShaderLazy } from "@/components/global/GlassShaderLazy";
 import { HeroAudit } from "./HeroAudit";
-import { Search, ScanLine, Mail, GitPullRequest, CircleCheck } from "lucide-react";
+import { Wordmark } from "@/components/global/Logo";
+import { Search, ScanLine, GitPullRequest, CircleCheck } from "lucide-react";
 
 /* ── The standard Wirable defines ───────────────────────────────────────────
-   7 weighted dimensions, summing to 100. The score is the product. */
+   6 weighted dimensions, summing to 100. The score is the product. */
 
+// Mirrors the canonical rubric in backend core/contracts.py (SCORE_DIMENSIONS).
+// Six dimensions, weights sum to 100. Keep in sync with the backend.
 const RUBRIC: { dim: string; key: string; weight: number; note: string }[] = [
+  {
+    dim: "API surface",
+    key: "api_surface",
+    weight: 20,
+    note: "A programmatic surface an agent can drive: OpenAPI or typed endpoints.",
+  },
   {
     dim: "Auth",
     key: "auth",
     weight: 20,
-    note: "Machine-obtainable credentials. No human-only OAuth dead-ends.",
+    note: "Deterministic auth: tokens or keys, not a human-only login.",
   },
   {
     dim: "MCP",
-    key: "mcp",
+    key: "mcp_availability",
     weight: 20,
-    note: "A served MCP surface agents can call without a browser.",
-  },
-  {
-    dim: "Discoverability",
-    key: "discoverability",
-    weight: 15,
-    note: "/llms.txt, an agent manifest, a documented entrypoint.",
+    note: "An MCP endpoint already discoverable and served.",
   },
   {
     dim: "Errors",
-    key: "errors",
+    key: "error_quality",
     weight: 15,
-    note: "Machine-readable codes, not HTML stack-trace pages.",
+    note: "Machine-readable errors: stable codes, retryable signals.",
   },
   {
     dim: "Idempotency",
     key: "idempotency",
     weight: 15,
-    note: "Retries are safe. Event IDs let agents dedupe.",
-  },
-  {
-    dim: "Rate limits",
-    key: "ratelimit",
-    weight: 10,
-    note: "Remaining + Retry-After headers so agents self-throttle.",
+    note: "Actions retry safely, with no duplicate side effects.",
   },
   {
     dim: "Docs",
     key: "docs",
-    weight: 5,
-    note: "Structured, parseable reference — not a marketing PDF.",
+    weight: 10,
+    note: "Agent-facing docs: llms.txt or a machine-readable reference.",
   },
 ];
 
 /* ── The loop — find → audit → email → fix → verify ──────────────────────────── */
 
 const LOOP = [
-  { icon: Search, label: "Find", line: "Surface SaaS that agents can't use." },
-  { icon: ScanLine, label: "Audit", line: "N=3 agents reach a consensus score." },
-  { icon: Mail, label: "Email", line: "The audit is the cold-email lead magnet." },
-  { icon: GitPullRequest, label: "Fix", line: "Generate an MCP server, open a PR." },
-  { icon: CircleCheck, label: "Verify", line: "Re-audit. Prove the score went up." },
+  { icon: Search, label: "Test", line: "An agent drives your product like a real user." },
+  { icon: ScanLine, label: "Score", line: "N=3 agents reach a consensus, 0 to 100." },
+  { icon: GitPullRequest, label: "Fix", line: "Host an MCP proxy, open a PR. No code changes." },
+  { icon: CircleCheck, label: "Verify", line: "Re-run through the proxy. Watch the score climb." },
 ];
 
 /* score color ramp — green ≥70 / amber 50–69 / rose <50 */
@@ -82,13 +79,7 @@ function Nav() {
       }}
     >
       <div className="mx-auto flex h-12 max-w-[1120px] items-center px-6">
-        <a
-          href="/"
-          className="font-display text-sm font-bold uppercase tracking-[0.08em]"
-          style={{ color: "var(--foreground)" }}
-        >
-          Wirable
-        </a>
+        <Wordmark href="/" size={22} />
 
         <div className="ml-8 hidden flex-1 items-center gap-6 text-[13px] sm:flex">
           <a href="#standard" className="cn-hover" style={{ color: "var(--muted-foreground)" }}>
@@ -99,6 +90,12 @@ function Nav() {
           </a>
           <a href="#proof" className="cn-hover" style={{ color: "var(--muted-foreground)" }}>
             Proof
+          </a>
+          <a href="#pricing" className="cn-hover" style={{ color: "var(--muted-foreground)" }}>
+            Pricing
+          </a>
+          <a href="/registry" className="cn-hover" style={{ color: "var(--muted-foreground)" }}>
+            Registry
           </a>
         </div>
 
@@ -122,14 +119,22 @@ function Nav() {
 function HeroBloom() {
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden" aria-hidden>
+      {/* The one sanctioned atmospheric exception (DESIGN.md): the WebGL
+          sky→indigo glass bloom. Held BEHIND content at low opacity and
+          edge-masked top→sides so it reads as atmosphere, not a feature.
+          Lazy / client-only / reduced-motion-aware (see GlassShaderLazy). */}
       <div
-        className="absolute left-1/2 top-[-220px] h-[640px] w-[1100px] -translate-x-1/2 opacity-[0.5]"
+        className="absolute inset-0 opacity-[0.38]"
         style={{
-          background:
-            "radial-gradient(ellipse 52% 50% at 50% 50%, oklch(0.72 0.13 240 / 0.55) 0%, oklch(0.60 0.10 248 / 0.30) 42%, transparent 72%)",
-          filter: "blur(60px)",
+          maskImage:
+            "radial-gradient(120% 90% at 50% 18%, black 0%, black 40%, transparent 82%)",
+          WebkitMaskImage:
+            "radial-gradient(120% 90% at 50% 18%, black 0%, black 40%, transparent 82%)",
         }}
-      />
+      >
+        <GlassShaderLazy />
+      </div>
+      {/* faint structural grid, kept for texture above the bloom */}
       <div
         className="absolute inset-0 opacity-[0.025]"
         style={{
@@ -228,27 +233,16 @@ export default async function LandingPage() {
                 className="mx-auto mt-5 max-w-lg text-[16px] leading-relaxed"
                 style={{ color: "var(--muted-foreground)" }}
               >
-                We prove it with a live browser audit, then fix it — a score from
-                0&ndash;100 across 7 dimensions, three agents reaching consensus.
+                We prove it with a live browser audit, then fix it. A score from
+                0&ndash;100 across 6 dimensions, three agents reaching consensus.
               </p>
             </Reveal>
           </div>
 
           {/* The showpiece — give it a clean frame and room */}
           <Reveal delay={120}>
-            <div
-              className="mx-auto mt-12 max-w-2xl rounded-lg p-2"
-              style={{
-                background: "var(--surface-2)",
-                border: "1px solid var(--border)",
-              }}
-            >
-              <div
-                className="rounded-md p-4"
-                style={{ background: "var(--surface-1)", border: "1px solid var(--border)" }}
-              >
-                <HeroAudit />
-              </div>
+            <div className="mx-auto mt-12 max-w-2xl">
+              <HeroAudit />
             </div>
           </Reveal>
 
@@ -260,10 +254,29 @@ export default async function LandingPage() {
               Free test, no account &middot; generate a hosted MCP proxy to fix it
             </p>
           </Reveal>
+
+          {/* Product Hunt launch badge */}
+          <Reveal delay={200}>
+            <div className="mt-6 flex justify-center">
+              <a
+                href="https://www.producthunt.com/products/wirable?embed=true&utm_source=badge-featured&utm_medium=badge&utm_campaign=badge-wirable"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  alt="Wirable - Can AI agents use your product? | Product Hunt"
+                  width={250}
+                  height={54}
+                  src="https://api.producthunt.com/widgets/embed-image/v1/featured.svg?post_id=1182753&theme=dark&t=1782618717843"
+                />
+              </a>
+            </div>
+          </Reveal>
         </div>
       </section>
 
-      {/* ── The standard — the 7-dimension rubric, dense table ── */}
+      {/* ── The standard — the 6-dimension rubric, dense table ── */}
       <section id="standard" className="border-b" style={{ borderColor: "var(--border)" }}>
         <div className="mx-auto max-w-[1120px] px-6 py-24">
           <Reveal>
@@ -274,7 +287,7 @@ export default async function LandingPage() {
                   className="font-display font-semibold tracking-[-0.02em]"
                   style={{ fontSize: "1.4375rem" }}
                 >
-                  Seven dimensions. One hundred points.
+                  Six dimensions. One hundred points.
                 </h2>
               </div>
               <p
@@ -375,16 +388,20 @@ export default async function LandingPage() {
             </h2>
           </Reveal>
 
-          <Reveal delay={40}>
-            <div className="mt-12 grid gap-px sm:grid-cols-5" style={{ background: "var(--border)" }}>
-              {LOOP.map(({ icon: Icon, label, line }, i) => (
+          <div className="mt-12 grid gap-px sm:grid-cols-2 lg:grid-cols-4" style={{ background: "var(--border)" }}>
+            {LOOP.map(({ icon: Icon, label, line }, i) => (
+              <Reveal key={label} delay={i * 40}>
                 <div
-                  key={label}
-                  className="flex flex-col gap-3 p-5"
+                  className="flex h-full flex-col gap-3 p-5"
                   style={{ background: "var(--surface-1)" }}
                 >
-                  <div className="flex items-center gap-2">
-                    <Icon className="h-4 w-4" style={{ color: "var(--primary)" }} strokeWidth={1.75} />
+                  <div className="flex items-center gap-2.5">
+                    <span
+                      className="flex h-7 w-7 items-center justify-center rounded-md border"
+                      style={{ borderColor: "var(--border)", color: "var(--primary)" }}
+                    >
+                      <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+                    </span>
                     <span className="data text-[11px]" style={{ color: "var(--fg-subtle)" }}>
                       {String(i + 1).padStart(2, "0")}
                     </span>
@@ -394,9 +411,9 @@ export default async function LandingPage() {
                     {line}
                   </p>
                 </div>
-              ))}
-            </div>
-          </Reveal>
+              </Reveal>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -416,7 +433,7 @@ export default async function LandingPage() {
               style={{ color: "var(--muted-foreground)" }}
             >
               We audit before, open the PR, then re-audit live. Same rubric, same
-              agents — the only thing that changed is the product.
+              agents. The only thing that changed is the product.
             </p>
           </Reveal>
 
@@ -466,12 +483,79 @@ export default async function LandingPage() {
               style={{ color: "var(--muted-foreground)" }}
             >
               Paste a domain. Three agents, a live browser, a score in under two
-              minutes — no account required.
+              minutes.
             </p>
           </Reveal>
           <Reveal delay={40} className="mt-8 flex justify-center">
             <CtaButton href="#audit">Run an audit</CtaButton>
           </Reveal>
+        </div>
+      </section>
+
+      {/* ── Pricing ── */}
+      <section id="pricing" className="border-b" style={{ borderColor: "var(--border)" }}>
+        <div className="mx-auto max-w-[1120px] px-6 py-20">
+          <Reveal>
+            <div className="eyebrow mb-2">Pricing</div>
+            <h2 className="font-display text-[28px] font-semibold tracking-tight">
+              Free to test. Pay to keep agents in.
+            </h2>
+            <p className="mt-2 max-w-xl text-[14px]" style={{ color: "var(--muted-foreground)" }}>
+              The audit is free. The recurring value is the hosted MCP proxy and drift
+              monitoring that keep your product usable by agents over time.
+            </p>
+          </Reveal>
+
+          <div className="mt-10 grid gap-5 sm:grid-cols-2">
+            {/* Free */}
+            <Reveal>
+              <div className="flex h-full flex-col rounded-lg border p-7" style={{ borderColor: "var(--border)", background: "var(--surface-1)" }}>
+                <div className="eyebrow text-[10px]">Free</div>
+                <div className="mt-3 flex items-end gap-1">
+                  <span className="font-display data text-[41px] font-semibold leading-none">$0</span>
+                </div>
+                <ul className="mt-6 flex flex-1 flex-col gap-2.5 text-[14px]" style={{ color: "var(--muted-foreground)" }}>
+                  <li>3 full agent-readiness audits</li>
+                  <li>N=3 agents, live browser, consensus score</li>
+                  <li>The Wrapped verdict + per-dimension breakdown</li>
+                  <li>Shareable score</li>
+                </ul>
+                <a href="/signin" className="mt-7 inline-flex h-11 items-center justify-center rounded border text-sm font-medium cn-hover"
+                  style={{ borderColor: "var(--border-strong)", background: "var(--surface-1)", color: "var(--foreground)" }}>
+                  Start free
+                </a>
+              </div>
+            </Reveal>
+
+            {/* Pro */}
+            <Reveal delay={60}>
+              <div className="flex h-full flex-col rounded-lg border p-7"
+                style={{ borderColor: "color-mix(in oklch, var(--primary) 45%, transparent)", background: "var(--primary-soft)" }}>
+                <div className="flex items-center justify-between">
+                  <div className="eyebrow text-[10px]" style={{ color: "var(--primary)" }}>Pro</div>
+                  <span className="rounded-full px-2.5 py-0.5 text-[10px] uppercase tracking-[0.08em]"
+                    style={{ border: "1px solid var(--primary)", color: "var(--primary)" }}>most popular</span>
+                </div>
+                <div className="mt-3 flex items-end gap-1.5">
+                  <span className="font-display data text-[41px] font-semibold leading-none">$29</span>
+                  <span className="data mb-1 text-[14px]" style={{ color: "var(--muted-foreground)" }}>/month</span>
+                </div>
+                <ul className="mt-6 flex flex-1 flex-col gap-2.5 text-[14px]" style={{ color: "var(--foreground)" }}>
+                  <li>Unlimited audits (fair use)</li>
+                  <li>A hosted MCP proxy kept live in front of your product</li>
+                  <li>Drift monitoring: re-checks on every commit</li>
+                  <li>GitHub fix PRs (llms.txt, AGENTS.md, MCP manifest)</li>
+                </ul>
+                <a href="/signin" className="mt-7 inline-flex h-11 items-center justify-center rounded text-sm font-semibold cn-hover"
+                  style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>
+                  Go Pro
+                </a>
+              </div>
+            </Reveal>
+          </div>
+          <p className="mt-6 text-[12px]" style={{ color: "var(--fg-subtle)" }}>
+            Judges &amp; hackathon viewers: use your access code on the sign-in page for full access.
+          </p>
         </div>
       </section>
 
@@ -481,9 +565,7 @@ export default async function LandingPage() {
           className="mx-auto flex max-w-[1120px] flex-col items-start justify-between gap-3 px-6 py-8 text-[13px] sm:flex-row sm:items-center"
           style={{ color: "var(--muted-foreground)" }}
         >
-          <span className="font-display text-sm font-bold uppercase tracking-[0.08em]" style={{ color: "var(--foreground)" }}>
-            Wirable
-          </span>
+          <Wordmark href={null} size={20} />
           <span>The standard for agent-readiness &middot; find, audit, fix, verify.</span>
           <span className="data text-[12px]">&copy; {new Date().getFullYear()}</span>
         </div>

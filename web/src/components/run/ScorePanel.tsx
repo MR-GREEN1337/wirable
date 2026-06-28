@@ -1,36 +1,68 @@
 "use client";
 
-import { CheckCircle2, XCircle } from "lucide-react";
-import {
-  scoreColor,
-  scoreLabel,
-  type ScoreDimension,
-} from "@/lib/run-events";
-
-// Human labels + weights for the 6 contract dimensions (CONTRACTS.md §b).
-const DIM_META: Record<string, { label: string; weight: number }> = {
-  api_surface: { label: "API surface", weight: 20 },
-  auth: { label: "Agent auth", weight: 20 },
-  error_quality: { label: "Error quality", weight: 15 },
-  idempotency: { label: "Idempotency", weight: 15 },
-  mcp_availability: { label: "MCP availability", weight: 20 },
-  docs: { label: "Agent docs", weight: 10 },
-};
+import { Check, X } from "lucide-react";
+import { scoreColor, scoreLabel, type ScoreDimension } from "@/lib/run-events";
+import { DIMENSION_META, dimensionConcept } from "@/lib/run-icons";
+import { useCountUp } from "@/lib/use-count-up";
 
 interface ScorePanelProps {
   total: number;
   dimensions: ScoreDimension[];
 }
 
-// Frontend-side defense: even if the backend ever sends a giant or repeated
-// error blob, collapse whitespace, dedup a repeated phrase, and hard-cap the
-// length. The row truncates visually too — full text lives in the title tooltip.
+// Collapse whitespace, kill a back-to-back repeated phrase, hard-cap length.
 function cleanEvidence(raw: string | undefined): string {
   if (!raw) return "";
   let s = raw.replace(/\s+/g, " ").trim();
-  // Kill a phrase repeated back-to-back (e.g. "X X X" → "X").
   s = s.replace(/(.{8,}?)(?:\s*\1)+/g, "$1");
   return s.length > 240 ? `${s.slice(0, 240)}…` : s;
+}
+
+/* ── The ring — an SVG progress ring around the big number ────────────────────*/
+
+function ScoreRing({ value, color }: { value: number; color: string }) {
+  const display = useCountUp(value);
+  const R = 52;
+  const C = 2 * Math.PI * R;
+  const offset = C - (display / 100) * C;
+
+  return (
+    <div className="relative flex h-32 w-32 shrink-0 items-center justify-center">
+      <svg width="128" height="128" viewBox="0 0 128 128" className="-rotate-90">
+        <circle
+          cx="64"
+          cy="64"
+          r={R}
+          fill="none"
+          stroke="var(--border)"
+          strokeWidth="6"
+        />
+        <circle
+          cx="64"
+          cy="64"
+          r={R}
+          fill="none"
+          stroke={color}
+          strokeWidth="6"
+          strokeLinecap="round"
+          strokeDasharray={C}
+          strokeDashoffset={offset}
+          style={{ transition: "stroke-dashoffset 120ms linear" }}
+        />
+      </svg>
+      <div className="absolute flex flex-col items-center">
+        <span
+          className="font-display data leading-none"
+          style={{ fontSize: "2.5625rem", color, fontWeight: 700 }}
+        >
+          {display}
+        </span>
+        <span className="data text-[11px]" style={{ color: "var(--fg-subtle)" }}>
+          / 100
+        </span>
+      </div>
+    </div>
+  );
 }
 
 export function ScorePanel({ total, dimensions }: ScorePanelProps) {
@@ -38,53 +70,46 @@ export function ScorePanel({ total, dimensions }: ScorePanelProps) {
 
   return (
     <div
-      className="rounded border"
+      className="overflow-hidden rounded-md border"
       style={{ borderColor: "var(--border)", background: "var(--surface-1)" }}
     >
-      {/* Big number */}
+      {/* Big number + ring */}
       <div
-        className="flex items-end gap-4 border-b px-5 py-5"
+        className="flex items-center gap-6 border-b px-6 py-6"
         style={{ borderColor: "var(--border)" }}
       >
-        <div>
-          <div className="eyebrow mb-2">Agent-readiness</div>
-          <div className="flex items-end gap-2">
-            <span
-              className="font-display data leading-none"
-              style={{
-                fontSize: "3.25rem",
-                color,
-                fontWeight: 700,
-                animation: "score-in 400ms cubic-bezier(0.16,1,0.3,1) both",
-              }}
-            >
-              {total}
-            </span>
-            <span
-              className="data mb-1.5 text-[14px]"
-              style={{ color: "var(--fg-subtle)" }}
-            >
-              /100
-            </span>
+        <ScoreRing value={total} color={color} />
+        <div className="min-w-0 flex-1">
+          <div className="eyebrow mb-1.5">Agent-readiness</div>
+          <div
+            className="font-display text-[23px] font-semibold leading-tight"
+            style={{ color }}
+          >
+            {scoreLabel(total) === "agent-ready"
+              ? "Agent-ready"
+              : scoreLabel(total) === "partial"
+                ? "Needs work"
+                : "Blocked"}
           </div>
+          <p
+            className="mt-1.5 text-[13px] leading-relaxed"
+            style={{ color: "var(--muted-foreground)" }}
+          >
+            {total >= 70
+              ? "Agents can discover, authenticate, and complete the core task."
+              : total >= 50
+                ? "Agents partially succeed. Key paths still break."
+                : "Agents can't reliably drive this product yet."}
+          </p>
         </div>
-        <span
-          className="data mb-1.5 ml-auto text-[12px] uppercase tracking-[0.08em]"
-          style={{ color }}
-        >
-          {scoreLabel(total)}
-        </span>
       </div>
 
-      {/* hairline meter */}
-      <div className="h-0.5 w-full" style={{ background: "var(--border)" }}>
-        <div className="h-0.5" style={{ width: `${total}%`, background: color }} />
-      </div>
-
-      {/* 6 dimensions — each row stays one line; evidence clamps + tooltips */}
+      {/* 6 dimensions — each with its own icon + lane color */}
       <ul>
         {dimensions.map((d, i) => {
-          const meta = DIM_META[d.dim];
+          const meta = DIMENSION_META[d.dim];
+          const concept = dimensionConcept(d.dim);
+          const Icon = concept.icon;
           const label = meta?.label ?? d.dim.replace(/_/g, " ");
           const evidence = cleanEvidence(d.evidence);
           return (
@@ -93,17 +118,15 @@ export function ScorePanel({ total, dimensions }: ScorePanelProps) {
               className="flex items-center gap-3 px-4 py-2.5"
               style={{ borderTop: i === 0 ? "none" : "1px solid var(--border)" }}
             >
-              {d.passed ? (
-                <CheckCircle2
-                  className="h-4 w-4 shrink-0"
-                  style={{ color: "var(--success)" }}
-                />
-              ) : (
-                <XCircle
-                  className="h-4 w-4 shrink-0"
-                  style={{ color: "var(--danger)" }}
-                />
-              )}
+              <span
+                className="flex h-6 w-6 shrink-0 items-center justify-center rounded"
+                style={{
+                  color: concept.accent,
+                  background: `color-mix(in oklch, ${concept.accent} 12%, transparent)`,
+                }}
+              >
+                <Icon className="h-3.5 w-3.5" strokeWidth={1.75} />
+              </span>
               <span className="shrink-0 text-[13px] font-medium">{label}</span>
               {meta && (
                 <span
@@ -122,6 +145,19 @@ export function ScorePanel({ total, dimensions }: ScorePanelProps) {
                   {evidence}
                 </span>
               )}
+              <span
+                className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full"
+                style={{
+                  background: d.passed ? "var(--success)" : "var(--danger)",
+                  color: "#fff",
+                }}
+              >
+                {d.passed ? (
+                  <Check className="h-2.5 w-2.5" strokeWidth={3} />
+                ) : (
+                  <X className="h-2.5 w-2.5" strokeWidth={3} />
+                )}
+              </span>
             </li>
           );
         })}

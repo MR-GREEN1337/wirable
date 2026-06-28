@@ -6,6 +6,7 @@ import type { Metadata } from "next";
 import { Chakra_Petch, Inter, JetBrains_Mono } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
 import { auth } from "@/lib/auth";
+import { Analytics } from "@/components/global/Analytics";
 import "./globals.css";
 
 const inter = Inter({
@@ -31,7 +32,7 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: {
     default: "Wirable",
-    template: "%s — Wirable",
+    template: "%s · Wirable",
   },
   description:
     "Test whether an AI agent can complete real workflows on your platform, get a score, then host an MCP proxy that fixes the breakage.",
@@ -57,6 +58,7 @@ export default async function RootLayout({
       suppressHydrationWarning
     >
       <body>
+        <Analytics />
         <SessionProvider session={session}>{children}</SessionProvider>
       </body>
     </html>

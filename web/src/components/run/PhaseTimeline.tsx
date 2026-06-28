@@ -1,132 +1,143 @@
 "use client";
 
+import { Check } from "lucide-react";
 import { PHASES, type PhaseName, type ClassifyKind } from "@/lib/run-events";
+import { classifyConcept } from "@/lib/run-icons";
 
 export type PhaseState = "pending" | "active" | "done";
 
 interface PhaseTimelineProps {
   states: Record<PhaseName, PhaseState>;
   classify?: { kind: ClassifyKind; evidence: string } | null;
-  // Whether the proxy half (generate/deploy/verify) has been unlocked yet.
   proxyUnlocked: boolean;
 }
 
-function Dot({ state }: { state: PhaseState }) {
+function Node({ state, gated }: { state: PhaseState; gated: boolean }) {
   if (state === "done") {
     return (
       <span
-        className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full"
+        className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full"
         style={{ background: "var(--success)", color: "var(--success-foreground)" }}
       >
-        <svg width="9" height="9" viewBox="0 0 12 12" fill="none">
-          <path
-            d="M2.5 6.2L4.8 8.5L9.5 3.5"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        <Check className="h-3 w-3" strokeWidth={3} />
       </span>
     );
   }
   if (state === "active") {
     return (
-      <span className="relative flex h-4 w-4 shrink-0 items-center justify-center">
+      <span className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center">
         <span
-          className="absolute h-4 w-4 rounded-full"
-          style={{
-            background: "var(--primary)",
-            opacity: 0.25,
-            animation: "cn-hover 1200ms ease-in-out infinite alternate",
-          }}
+          className="absolute h-6 w-6 rounded-full"
+          style={{ background: "var(--primary)", opacity: 0.18, animation: "live-pulse 2s cubic-bezier(0.16,1,0.3,1) infinite" }}
         />
         <span
-          className="h-2 w-2 rounded-full"
-          style={{ background: "var(--primary)" }}
-        />
+          className="flex h-6 w-6 items-center justify-center rounded-full"
+          style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
+        >
+          <span className="h-2 w-2 rounded-full" style={{ background: "var(--primary-foreground)" }} />
+        </span>
       </span>
     );
   }
   return (
     <span
-      className="h-4 w-4 shrink-0 rounded-full border"
-      style={{ borderColor: "var(--border-strong)" }}
-    />
+      className="relative z-10 flex h-6 w-6 shrink-0 items-center justify-center rounded-full border"
+      style={{
+        borderColor: gated ? "var(--border)" : "var(--border-strong)",
+        background: "var(--surface-1)",
+      }}
+    >
+      <span
+        className="h-1.5 w-1.5 rounded-full"
+        style={{ background: gated ? "var(--border-strong)" : "var(--fg-subtle)" }}
+      />
+    </span>
   );
 }
 
 export function PhaseTimeline({ states, classify, proxyUnlocked }: PhaseTimelineProps) {
   return (
     <div
-      className="rounded border"
+      className="rounded-md border"
       style={{ borderColor: "var(--border)", background: "var(--surface-1)" }}
     >
       <div
-        className="flex items-center justify-between border-b px-3 py-2"
+        className="flex items-center justify-between border-b px-3 py-2.5"
         style={{ borderColor: "var(--border)" }}
       >
-        <span className="eyebrow">Workflow</span>
-        {classify && (
-          <span
-            className="data inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-[11px] uppercase tracking-[0.08em]"
-            style={{
-              border: "1px solid var(--primary)",
-              color: "var(--primary)",
-              background: "var(--primary-soft)",
-            }}
-            title={classify.evidence}
-          >
-            {classify.kind === "api" ? "API path" : "Site path"}
-          </span>
-        )}
+        <span className="eyebrow">Pipeline</span>
+        {classify &&
+          (() => {
+            const c = classifyConcept(classify.kind);
+            const Icon = c.icon;
+            return (
+              <span
+                className="data inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-[10px] uppercase tracking-[0.08em]"
+                style={{ border: `1px solid ${c.accent}`, color: c.accent }}
+                title={classify.evidence}
+              >
+                <Icon className="h-3 w-3" strokeWidth={2} />
+                {classify.kind === "api" ? "API path" : "Site path"}
+              </span>
+            );
+          })()}
       </div>
 
-      <ol className="flex flex-col">
+      <ol className="flex flex-col px-3 py-2">
         {PHASES.map((p, i) => {
           const state = states[p.key];
           const isProxyPhase = i >= 3;
-          const dimmed = isProxyPhase && !proxyUnlocked && state === "pending";
+          const gated = isProxyPhase && !proxyUnlocked && state === "pending";
+          const last = i === PHASES.length - 1;
+          const nextDone = !last && states[PHASES[i + 1].key] !== "pending";
           return (
-            <li
-              key={p.key}
-              className="flex items-center gap-3 px-3 py-2.5"
-              style={{
-                borderTop: i === 0 ? "none" : "1px solid var(--border)",
-                opacity: dimmed ? 0.45 : 1,
-              }}
-            >
-              <Dot state={state} />
-              <span
-                className="flex-1 text-[13px] font-medium"
-                style={{
-                  color:
-                    state === "active"
-                      ? "var(--primary)"
-                      : "var(--foreground)",
-                }}
+            <li key={p.key} className="relative flex items-start gap-3 pb-1.5 pt-1.5">
+              {/* connector line */}
+              {!last && (
+                <span
+                  className="absolute left-3 top-7 -ml-px h-[calc(100%-12px)] w-px"
+                  style={{
+                    background:
+                      state === "done" || nextDone
+                        ? "var(--success)"
+                        : "var(--border)",
+                    opacity: gated ? 0.4 : 1,
+                  }}
+                />
+              )}
+              <Node state={state} gated={gated} />
+              <div
+                className="flex min-w-0 flex-1 items-center justify-between pt-0.5"
+                style={{ opacity: gated ? 0.5 : 1 }}
               >
-                {p.label}
-              </span>
-              <span
-                className="data text-[10px] uppercase tracking-[0.08em]"
-                style={{
-                  color:
-                    state === "done"
-                      ? "var(--success)"
-                      : state === "active"
-                        ? "var(--primary)"
-                        : "var(--fg-subtle)",
-                }}
-              >
-                {state === "done"
-                  ? "done"
-                  : state === "active"
-                    ? "running"
-                    : isProxyPhase && !proxyUnlocked
-                      ? "gated"
-                      : "queued"}
-              </span>
+                <span
+                  className="text-[13px] font-medium"
+                  style={{
+                    color: state === "active" ? "var(--primary)" : "var(--foreground)",
+                  }}
+                >
+                  {p.label}
+                </span>
+                <span
+                  className="data text-[10px] uppercase tracking-[0.08em]"
+                  style={{
+                    color:
+                      state === "done"
+                        ? "var(--success)"
+                        : state === "active"
+                          ? "var(--primary)"
+                          : "var(--fg-subtle)",
+                  }}
+                >
+                  {state === "done"
+                    ? "done"
+                    : state === "active"
+                      ? "running"
+                      : gated
+                        ? "gated"
+                        : "queued"}
+                </span>
+              </div>
             </li>
           );
         })}

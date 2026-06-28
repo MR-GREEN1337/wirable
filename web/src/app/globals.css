@@ -161,6 +161,13 @@
     -moz-osx-font-smoothing: grayscale;
   }
 
+  /* Consistent, crisp keyboard focus — 1px ciel-bleu ring, no offset/shadow. */
+  :focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 1px var(--primary);
+    border-radius: var(--radius);
+  }
+
   body {
     background-color: var(--background);
     color: var(--foreground);
@@ -300,6 +307,20 @@
 @keyframes cursor-blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
+}
+
+/* Live pulse — a calm breathing ring used only while a run is in flight.
+   Glacial, reassuring; never an alarm. (Agency-OS "ambient liveness".) */
+@keyframes live-pulse {
+  0% { transform: scale(1); opacity: 0.5; }
+  70% { transform: scale(2.4); opacity: 0; }
+  100% { transform: scale(2.4); opacity: 0; }
+}
+
+/* Indeterminate progress shimmer — bounded, used on the active phase node. */
+@keyframes phase-progress {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(300%); }
 }
 
 /* Score number count-up fade */
