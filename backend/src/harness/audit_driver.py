@@ -56,7 +56,7 @@ SHOT_DIR = "/tmp/screenshots"
 ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 # Machine discovery now carries the verdict weight, so the human path is short.
-MAX_STEPS = int(os.environ.get("WIRABLE_MAX_STEPS", "12"))
+MAX_STEPS = int(os.environ.get("WIRABLE_MAX_STEPS", "16"))
 
 os.makedirs(SHOT_DIR, exist_ok=True)
 _frame = 0
@@ -953,7 +953,9 @@ def deep_explore(machine: dict) -> dict:
     trajectory: list[dict] = []
     blockers: list[str] = []
     machine_first = bool(machine.get("machine_path_present"))
-    step_cap = 7 if machine_first else MAX_STEPS
+    # Even machine-first targets deserve a real exploration (docs + API ref +
+    # auth + an example call + an error), not a 2-step "yep there's a spec".
+    step_cap = max(12, MAX_STEPS - 4) if machine_first else MAX_STEPS
     # A bound repo means real white-box work to do in the loop; give a few more
     # steps so the agent can cross-check code routes against live behavior.
     if HAS_REPO:
@@ -984,7 +986,12 @@ def deep_explore(machine: dict) -> dict:
             "programmatically (an API key or token from a docs or settings page). "
             "Do NOT create an account or log in through the human web UI, and do NOT fight CAPTCHAs or "
             f"verification codes — an agent uses the API, not the web form.{key_hint} "
-            "Use action 'done' as soon as you've confirmed whether the machine path is usable."
+            "Be THOROUGH — really exercise the machine path before finishing: open the docs/API "
+            "reference AND llms.txt/openapi if present, navigate at least two reference pages, locate "
+            "the authentication section and note exactly how an agent gets a key/token, find a concrete "
+            "example request, and inspect what an ERROR response looks like (status + body shape). Only "
+            "use action 'done' once you've actually walked the surface an agent would use — not on the "
+            "first page."
         )
     elif HAS_CREDS:
         # Pre-run access granted: LOG IN with the human's real credentials and
