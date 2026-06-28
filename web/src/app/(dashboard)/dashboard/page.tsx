@@ -10,10 +10,14 @@ import { scoreColor, scoreLabel } from "@/lib/run-events";
 
 export const dynamic = "force-dynamic";
 
-// Server-side: the backend base URL. Public var works server-side too; fall
-// back to the server-only BACKEND_URL if that's what's configured.
+// Server-side fetch needs an ABSOLUTE url (Node can't resolve "/api/..."). The
+// public var is baked EMPTY at build, so prefer the runtime server-only
+// BACKEND_URL (e.g. http://backend:8000). Use `||` so an empty string falls
+// through instead of short-circuiting (the `??` bug that emptied the dashboard).
 const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_URL ?? process.env.BACKEND_URL ?? "";
+  process.env.BACKEND_URL ||
+  process.env.NEXT_PUBLIC_BACKEND_URL ||
+  "http://localhost:8000";
 
 type Target = {
   company_id: string;
