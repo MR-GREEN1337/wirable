@@ -19,12 +19,15 @@ export function AgentGrid({
   domain,
   shots,
   live,
+  statusText,
   /** Number of agents in the consensus (default 3 — matches run_audit n=3). */
   n = 3,
 }: {
   domain: string;
   shots: AuditShot[];
   live: boolean;
+  /** The real current backend step (latest line) — shown in the loading state. */
+  statusText?: string;
   n?: number;
 }) {
   // Group shots by agent index. Always render at least `n` lanes so the switcher
@@ -74,6 +77,7 @@ export function AgentGrid({
         shots={current?.shots ?? []}
         live={live}
         label={`Agent ${(current?.agent ?? 0) + 1}`}
+        statusText={statusText}
       />
 
       {/* Switcher — one tab per agent, with its latest frame as a thumbnail. */}

@@ -179,16 +179,28 @@ export function AccessChip({ className }: { className?: string }) {
     );
   }
 
+  // Has free runs left, not unlimited → show the count AND a persistent
+  // Upgrade entry (the dashboard had no upgrade path otherwise).
   return (
-    <span
-      className={cn(
-        "data inline-flex h-7 items-center gap-1.5 rounded border px-2 text-[11px] font-medium",
-        className,
-      )}
-      style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
-      title={`${status.runs_used} of ${status.runs_limit} free runs used`}
-    >
-      {status.remaining} {status.remaining === 1 ? "run" : "runs"} left
+    <span className="inline-flex items-center gap-2">
+      <span
+        className={cn(
+          "data inline-flex h-7 items-center gap-1.5 rounded border px-2 text-[11px] font-medium",
+          className,
+        )}
+        style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
+        title={`${status.runs_used} of ${status.runs_limit} free runs used`}
+      >
+        {status.remaining} {status.remaining === 1 ? "run" : "runs"} left
+      </span>
+      <a
+        href="/access"
+        className="cn-hover inline-flex h-7 items-center gap-1.5 rounded px-2.5 text-[11px] font-semibold"
+        style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}
+      >
+        <Sparkles className="h-3 w-3" strokeWidth={2} />
+        Upgrade
+      </a>
     </span>
   );
 }

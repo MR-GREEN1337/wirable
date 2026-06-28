@@ -979,7 +979,11 @@ async def _describe_http_tool(name: str, method: str, path: str, op: dict) -> st
         + "Returns the upstream JSON response; non-2xx responses are normalized to "
         "{success:false, error_code, retryable}."
     )
-    if not key_pool.has_keys():
+    # A real OpenAPI summary already describes the operation — the per-tool Claude
+    # rephrase added 24 SERIAL model calls per spec-grounded build ("takes
+    # forever"). Use the template directly when we have a summary; only ask the
+    # model when the spec gave us nothing.
+    if summary or not key_pool.has_keys():
         return template
     prompt = (
         f"Tool name: {name}\nHTTP: {method.upper()} {path}\n"

@@ -547,7 +547,12 @@ export function RunView({ runId, domain }: { runId: string; domain: string }) {
 
           {/* All N agents browsing side by side — the consensus, live. */}
           <Section title="Live agents">
-            <AgentGrid domain={domain} shots={state.shots} live={running} />
+            <AgentGrid
+              domain={domain}
+              shots={state.shots}
+              live={running}
+              statusText={state.lines[state.lines.length - 1]?.msg}
+            />
           </Section>
 
           {/* Mid-run pause: the agent needs a value from the human (e.g. an OTP).

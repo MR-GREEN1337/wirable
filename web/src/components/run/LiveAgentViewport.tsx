@@ -166,6 +166,7 @@ export function LiveAgentViewport({
   live,
   compact = false,
   label,
+  statusText,
 }: {
   domain: string;
   shots: AuditShot[];
@@ -175,9 +176,12 @@ export function LiveAgentViewport({
   compact?: boolean;
   /** Optional label rendered in the chrome (e.g. "Agent 1"). */
   label?: string;
+  /** The REAL current backend step (latest line). Shown instead of random
+   *  boot phrases so the loading state reflects what's actually happening. */
+  statusText?: string;
 }) {
   const reduced = usePrefersReducedMotion();
-  const bootPhase = useTicker(BOOT_PHASES, shots.length === 0);
+  const bootPhase = useTicker(BOOT_PHASES, shots.length === 0 && !statusText);
 
   // null = follow the latest frame (video mode); number = pinned to a scrub pick.
   const [pinned, setPinned] = useState<number | null>(null);
@@ -351,31 +355,51 @@ export function LiveAgentViewport({
           <div
             className="absolute inset-0 flex flex-col items-center justify-center gap-3 px-6 text-center"
           >
-            <span
-              className="inline-flex h-9 w-9 items-center justify-center rounded-full border"
-              style={{ borderColor: "var(--t-border)", color: "var(--t-muted)" }}
-            >
-              {reduced ? (
+            {/* Run finished with no frame ever → don't spin forever. Headless
+                targets (API hosts, bot-walled sites) legitimately have nothing
+                to screenshot; say so instead of loading indefinitely. */}
+            {!live ? (
+              <>
                 <span
-                  className="h-2 w-2 rounded-full"
-                  style={{ background: "var(--t-blue)" }}
-                />
-              ) : (
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border"
+                  style={{ borderColor: "var(--t-border)", color: "var(--t-muted)" }}
+                >
+                  <span className="h-2 w-2 rounded-full" style={{ background: "var(--t-muted)" }} />
+                </span>
+                <span className="text-[13px]" style={{ color: "var(--t-fg)" }}>
+                  No visual frames for this target
+                </span>
+                <span className="text-[11px]" style={{ color: "var(--t-muted)", opacity: 0.8 }}>
+                  An API host or a page that blocks headless browsers — the audit
+                  still ran (see the score + activity below).
+                </span>
+              </>
+            ) : (
+              <>
                 <span
-                  className="h-4 w-4 rounded-full border-2 border-current border-t-transparent"
-                  style={{ animation: "spinner 0.9s linear infinite" }}
-                />
-              )}
-            </span>
-            <span className="text-[13px]" style={{ color: "var(--t-fg)" }}>
-              {bootPhase}…
-            </span>
-            <span
-              className="font-mono text-[11px]"
-              style={{ color: "var(--t-muted)", opacity: 0.7 }}
-            >
-              {domain || "<domain>"}
-            </span>
+                  className="inline-flex h-9 w-9 items-center justify-center rounded-full border"
+                  style={{ borderColor: "var(--t-border)", color: "var(--t-muted)" }}
+                >
+                  {reduced ? (
+                    <span className="h-2 w-2 rounded-full" style={{ background: "var(--t-blue)" }} />
+                  ) : (
+                    <span
+                      className="h-4 w-4 rounded-full border-2 border-current border-t-transparent"
+                      style={{ animation: "spinner 0.9s linear infinite" }}
+                    />
+                  )}
+                </span>
+                <span className="text-[13px]" style={{ color: "var(--t-fg)" }}>
+                  {(statusText || bootPhase)}…
+                </span>
+                <span
+                  className="font-mono text-[11px]"
+                  style={{ color: "var(--t-muted)", opacity: 0.7 }}
+                >
+                  {domain || "<domain>"}
+                </span>
+              </>
+            )}
           </div>
         ) : (
           <>
@@ -422,7 +446,7 @@ export function LiveAgentViewport({
                   className="font-mono text-[11px]"
                   style={{ color: "var(--t-fg)" }}
                 >
-                  {workingPhase}
+                  {statusText || workingPhase}
                   {reduced ? "" : "…"}
                 </span>
               </div>

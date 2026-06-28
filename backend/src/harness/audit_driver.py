@@ -293,47 +293,35 @@ def run_bash(cmd: str, timeout: int = 60) -> str:
         return f"__err__ {e}"
 
 
-def _page_painted(wait_s: float = 2.5) -> bool:
-    """True once a REAL document is on screen (not about:blank / unpainted).
-
-    Polls briefly so a shot taken right after a navigation captures the loaded
-    page instead of a white in-transition frame. Returns False ONLY when the tab
-    is genuinely blank (about:blank / no document) — so we never emit white
-    frames, but we also never drop a real-but-sparse page.
-    """
-    import time as _t
-    deadline = _t.time() + wait_s
-    while True:
-        href = ab("eval", "location.href", timeout=8) or ""
-        blank = (not href) or href.startswith("__err__") or "about:blank" in href
-        if not blank:
-            probe = ab(
-                "eval",
-                "String(document.body?document.body.innerText.trim().length:0)+'|'+"
-                "String(document.querySelectorAll('img,svg,canvas,video,input,button').length)",
-                timeout=8,
-            )
-            try:
-                txt, vis = probe.split("|")
-                if int(txt) > 3 or int(vis) > 0:
-                    return True
-            except Exception:  # noqa: BLE001
-                return True  # eval ran but odd shape — assume painted
-        if _t.time() > deadline:
-            return not blank  # real URL but sparse → still capture; about:blank → skip
-        _t.sleep(0.4)
+# A blank/white page compresses to a few KB of JPEG; a real rendered page (even
+# a sparse JSON/docs page) is far larger. We detect white frames by SIZE — this
+# is robust, unlike DOM eval which is flaky on JSON / error / canvas pages and
+# would skip legit frames (leaving the live viewport stuck loading forever).
+_MIN_FRAME_BYTES = int(os.environ.get("WIRABLE_MIN_FRAME_BYTES", "6000"))
 
 
 def shot(caption: str, dimension: str = "general") -> None:
+    """Capture a frame, but DROP it if it's a blank/white page (by byte size).
+
+    A status shot taken before the page opens or after it closes compresses to
+    ~3KB of white JPEG; we delete those so the viewport never flashes white. Real
+    pages (16KB+) are kept. The frame counter only advances on a kept frame.
+    """
     global _frame
-    # Never emit a white frame: skip the capture entirely when the tab is blank
-    # (e.g. a status shot before the page opens or after it's closed). The live
-    # viewport keeps the previous real frame instead of flashing white.
-    if not _page_painted():
-        return
-    _frame += 1
-    stem = f"{SHOT_DIR}/{_frame:04d}"
+    nxt = _frame + 1
+    stem = f"{SHOT_DIR}/{nxt:04d}"
     ab("screenshot", f"{stem}.jpg", timeout=30)
+    try:
+        size = os.path.getsize(f"{stem}.jpg")
+    except OSError:
+        return  # no file written at all
+    if size < _MIN_FRAME_BYTES:
+        try:
+            os.remove(f"{stem}.jpg")  # blank — don't emit it
+        except OSError:
+            pass
+        return
+    _frame = nxt
     try:
         json.dump({"caption": caption[:120], "dimension": dimension, "url": URL}, open(f"{stem}.json", "w"))
     except Exception:  # noqa: BLE001
@@ -479,13 +467,12 @@ def screen_b64() -> str:
     page so the model falls back to the a11y tree instead of 'seeing' white."""
     try:
         import base64 as _b64
-        if not _page_painted(1.5):
-            return ""
         p = "/tmp/_vision.jpg"
         ab("screenshot", p, timeout=20)
         if os.path.exists(p):
             data = open(p, "rb").read()
-            if data and len(data) < 1_400_000:
+            # Skip blank pages (tiny) so the model gets the tree, not white.
+            if data and _MIN_FRAME_BYTES <= len(data) < 1_400_000:
                 return _b64.b64encode(data).decode()
     except Exception:  # noqa: BLE001
         pass
