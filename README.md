@@ -1,272 +1,165 @@
 # Wirable
 
-Paris Builds 2026 hackathon submission.
+**Can an AI agent actually use your product? Wirable finds out, then fixes it.**
 
-Wirable, internally branded in the app as AgentReady, audits whether a SaaS product is usable by autonomous agents, then generates the missing agent interface and opens a GitHub pull request to fix it.
+Paris Builds 2026 — software for agents.
 
-The core loop is simple:
+Wirable is a black-box service that (1) tests whether an autonomous AI agent can complete real workflows on any product, (2) scores it 0–100 across six deterministic dimensions, (3) hosts an MCP server *in front of* the unchanged product that repairs the semantic breakage, and (4) proves the fix by re-running the exact same audit through the proxy and reporting the before/after delta. No code access. Nothing installed on the target's side.
 
-1. Find SaaS products that are likely blocked for agents.
-2. Run live browser and machine-endpoint audits in isolated sandboxes.
-3. Score the product against a 7-part agent-readiness rubric.
-4. Send a founder-facing report when a reachable contact is available.
-5. Generate MCP, `llms.txt`, docs, OpenAPI, and eval artifacts.
-6. Open a PR against the customer's repo.
-7. Re-audit after the fix to prove the score improved.
+```
+URL ──▶  AUDIT  ──▶  SCORE  ──▶  PROXY (the fix)  ──▶  VERIFY
+       3 agents      0–100      hosted MCP server      40 → 85
+       (sandboxes)   6 dims     (no code change)       (measured)
+```
 
-## Why This Exists
+---
 
-Most SaaS products were built for humans clicking around a UI. Agents need something different: stable machine entrypoints, machine-readable errors, retry-safe operations, explicit rate-limit metadata, discoverable docs, and auth that does not strand them in human-only OAuth flows.
+## Why this exists
 
-Wirable turns that gap into a measurable score and a concrete code change.
+Almost every SaaS product was built for a human clicking a UI. An agent needs something different: a stable machine entrypoint, machine-readable errors it can branch on, retry-safe (idempotent) writes, deterministic auth that doesn't strand it in a human OAuth dance, and discoverable docs. When those are missing, the agent doesn't get a clean "no" — it gets an ambiguous 200, a CAPTCHA, or a wall of HTML, and it fails silently.
 
-## Hackathon Demo
+Wirable measures that gap honestly, then closes it without asking the product team to ship anything.
 
-Recommended demo path:
+---
 
-1. Open the landing page and run a free audit for a public SaaS domain.
-2. Watch the SSE audit terminal stream progress and screenshots from the sandbox.
-3. Open the generated public report with the weighted score and evidence.
-4. Sign in, claim a company, and connect GitHub.
-5. Start a fix run for `owner/repo`.
-6. Watch the fix stream while a Daytona sandbox clones the repo and runs the OpenCode agent.
-7. Open the generated PR containing the MCP server, `llms.txt`, agent guide, and eval.
-8. Trigger verification to re-audit and compare before/after scores.
+## The four stages
 
-The product also includes an autonomous scout console that can discover targets, audit them, enrich founder contacts, and send outbound report emails when configured.
+### 1. Audit — *can an agent use this?*
 
-## Agent-Readiness Rubric
+`POST /api/v1/run {url}` spins up **three independent agents in parallel**, each in its own isolated [Daytona](https://daytona.io) sandbox. Each agent drives a real headless browser (`agent-browser`) using the page's accessibility tree **plus a vision screenshot** (set-of-marks grounding), and also has a `bash` tool and a **skill library** (signup, login, call-endpoint, provoke-error, test-idempotency, connect-mcp, clone-repo, scan-routes, find-openapi, …) so it can act like a real agent, not just scrape.
 
-Wirable scores products out of 100 across seven dimensions:
+Each agent walks the product the way an agent would — find the machine surface (llms.txt / OpenAPI / MCP), read the docs and API reference, locate auth, attempt the core action, trigger an error, retry a write — and emits a live screenshot stream you watch in the run cockpit.
 
-| Dimension | Weight | What It Checks |
-| --- | ---: | --- |
-| Auth | 20 | Agents can obtain and use credentials without human-only dead ends. |
-| MCP | 20 | There is a served MCP interface or equivalent machine-callable surface. |
-| Discoverability | 15 | Agents can find `/llms.txt`, manifests, docs, or machine entrypoints. |
-| Errors | 15 | Failures return machine-readable codes and recovery hints. |
-| Idempotency | 15 | Retries and repeated actions are safe and deduplicable. |
-| Rate limits | 10 | Responses expose limits, remaining budget, and retry timing. |
-| Docs | 5 | Reference material is structured and parseable by agents. |
+**CATTS consensus.** All three agents run the full (deep) walk and vote independently. For each dimension the verdicts are combined by **majority vote**; on a close split a Claude **arbiter** adjudicates using the pooled evidence (`catts_aggregate_with_arbiter`). This is what makes a score robust to a single agent hallucinating a pass or fail. Each agent pulls its own Claude key from a pool so the fan-out doesn't trip per-key rate limits.
 
-Multiple audit agents inspect the target independently. CATTS, Consensus Aggregation Through Threshold Scoring, merges their evidence. When agents disagree and Claude keys are configured, a stricter arbiter adjudicates the disputed dimension.
+### 2. Score — *six deterministic dimensions*
 
-## What Is Built
+| Dimension | Weight | What it asks |
+|---|---|---|
+| `api_surface` | 20 | Is there a programmatic surface an agent can call? |
+| `auth` | 20 | Can an agent authenticate deterministically (key/token, not human-only OAuth/CAPTCHA)? |
+| `mcp_availability` | 20 | Is there an MCP endpoint / machine manifest? |
+| `error_quality` | 15 | Are errors machine-readable (stable code + retryable flag)? |
+| `idempotency` | 15 | Are mutating operations safe to retry? |
+| `docs` | 10 | Are agent-facing docs discoverable (llms.txt / OpenAPI)? |
 
-- Public marketing page with an embedded audit launcher.
-- FastAPI backend with audit, fix, report, dashboard, onboarding, GitHub, discovery, tracking, and outbound endpoints.
-- Next.js dashboard for onboarding, live audit streams, fix streams, GitHub connection, reports, and scout console.
-- Daytona sandbox orchestration for isolated audit and fix jobs.
-- OpenCode-based harness prompts for audit, fix, outbound, discovery, and enrichment agents.
-- Live screenshot streaming from the audit sandbox via SSE.
-- Postgres persistence for companies, audits, audit steps, clients, MCP fixes, and outbound email logs.
-- GitHub PR generation for agent-readiness fixes.
-- Optional Unipile outbound email integration with tracking pixels.
-- Docker Compose for local Postgres, backend, and web services.
+The score is the sum of passed dimension weights — fully deterministic given the agents' verdicts.
+
+### 3. Proxy — *the fix, with no code change*
+
+`POST /api/v1/run/{id}/proxy` generates and **hosts a real MCP server that sits in front of the unchanged product**. It is served at:
+
+```
+https://wirable.dev/api/v1/proxy/<run_id>/mcp
+```
+
+(The Next.js frontend rewrites `/api/v1/*` to the backend, so that public URL is the live MCP endpoint an agent connects its client to.)
+
+The proxy is **grounded in the target's real interface**: if the product publishes an OpenAPI spec (or its repo is bound), Wirable maps the actual endpoints into typed MCP tools; otherwise it synthesizes tools from what the audit discovered. It then fixes the exact things the audit flagged:
+
+- **MCP availability** — it *is* a spec-compliant MCP endpoint (protocol `2025-06-18`: `initialize`, `tools/list`, `tools/call`, Streamable-HTTP, bearer auth + `.well-known/oauth-protected-resource`).
+- **Error quality** — every upstream response is normalized to `{success, error_code, retryable}`.
+- **Idempotency** — `Idempotency-Key` is enforced on mutating tools.
+- **Auth** — the owner's API key is stored **server-side** and injected on each call, so the agent never sees a secret.
+- **Docs** — it serves `llms.txt` and `.well-known/mcp.json` so agents discover it.
+
+One click adds it to Cursor (deep link) or copies the config for any MCP client.
+
+### 4. Verify — *prove it, don't claim it*
+
+`verify_against_proxy` takes the **before** score (the original audit) and re-runs the **same deterministic rubric through the live proxy** — including a real read-only `tools/call` to confirm the MCP is reachable and working — then reports the **after** score. The delta (e.g. `40 → 85`) is a measurement, not marketing. The proxy is strictly additive, so it never reports a regression.
+
+---
+
+## The GitHub fix (Pro)
+
+If the owner connects a repo, Wirable also runs an agentic fix harness in a sandbox: it clones the repo, generates grounded `llms.txt`, `AGENTS.md`, `CLAUDE.md`, `docs/agent-readiness.md`, and `.well-known/mcp.json` (referencing the hosted MCP), commits on a branch, pushes, and opens a PR — streaming each step live onto the run page. Wirable hosts the MCP; the PR only *references* it.
+
+## The registry
+
+`/registry` is a public directory of products Wirable has tested that have a live hosted MCP — each with its real score and a one-click "Add to Cursor" / copy-config. Backed by `GET /api/v1/registry` (self/test domains and unscored entries are filtered out).
+
+---
 
 ## Architecture
 
-```text
-Next.js web app
-  |-- public audit flow
-  |-- authenticated dashboard
-  |-- SSE terminals for audit/fix progress
-  |
-FastAPI backend
-  |-- /api/v1/audit       live CATTS audit jobs
-  |-- /api/v1/fix         repo fix jobs and verification
-  |-- /api/v1/report      public audit reports
-  |-- /api/v1/discovery   autonomous scout pipeline
-  |-- /api/v1/outbound    founder report emails
-  |-- /api/v1/github      repo connection flow
-  |
-Postgres
-  |-- companies, clients, audits, audit steps, MCP fixes, outbound logs
-  |
-Daytona sandboxes
-  |-- OpenCode audit agents
-  |-- browser screenshots
-  |-- repo cloning and fix generation
-  |
-External services
-  |-- Anthropic Claude for agents and arbitration
-  |-- GitHub OAuth and pull requests
-  |-- Google OAuth sign-in
-  |-- Unipile email sending, optional
+```
+Next.js 15 (App Router, Lyra design system)
+   │  /api/v1/* rewrite ──▶  FastAPI backend
+   │                           ├─ orchestrator → test_service (3 agents)
+   │                           │     └─ Daytona sandboxes: agent-browser + skills + bash
+   │                           │     └─ CATTS consensus + Claude arbiter
+   │                           ├─ proxy_generator → proxy_runtime (hosted MCP-over-HTTP)
+   │                           ├─ verification_service (before/after)
+   │                           ├─ github_harness_fix (clone → PR, streamed)
+   │                           └─ entitlements / billing (Stripe)
+   └─ Postgres (companies / audits / mcp / clients / users)
 ```
 
-## Tech Stack
+- **Agents / LLM:** Anthropic Claude (audit reasoning, arbiter, tool descriptions), key pool for fan-out.
+- **Sandboxes:** Daytona declarative snapshots (`WIRABLE_SANDBOX_IMAGE`).
+- **Auth:** email/password (bcrypt) + Google OAuth + guest, JWT bearer; Cloudflare Turnstile on signup.
+- **Billing:** Stripe Checkout (Pro = host the proxy + open the GitHub PR); the audit is always free. Access codes grant unlimited.
+- **Email:** Resend (welcome). **Observability:** Sentry + PostHog.
+- **Deploy:** Hetzner box, `docker-compose`, Traefik TLS for `wirable.dev`.
 
-- Frontend: Next.js 15, React 19, TypeScript, Tailwind CSS, NextAuth.
-- Backend: FastAPI, SQLAlchemy async, Alembic, Pydantic Settings.
-- Database: Postgres 16.
-- Agents: OpenCode, Claude, CATTS aggregation.
-- Sandboxes: Daytona with a custom Chromium/Playwright/OpenCode image.
-- Integrations: GitHub, Google OAuth, Unipile.
-- Local runtime: Docker Compose, Python 3.12, Node 20.
-
-## Repository Layout
-
-```text
-.
-|-- backend/              # FastAPI API, models, services, Alembic migrations
-|-- web/                  # Next.js app, marketing site, dashboard, reports
-|-- harness/              # OpenCode prompts and skill playbooks
-|-- docker/sandbox/       # Daytona sandbox image with Chromium and OpenCode
-|-- components/           # Shared landing/global components
-|-- styles/               # Shared CSS and styling utilities
-|-- docker-compose.yml    # Local Postgres, backend, and web
-|-- setup.sh              # One-shot macOS/Linux dev setup
-|-- setup.ps1             # One-shot Windows dev setup
-`-- .env.example          # Root environment template
-```
-
-## Quick Start
-
-Prerequisites:
-
-- Python 3.12+
-- Node.js 20+
-- Docker
-- Git
-- A Daytona API key
-- An Anthropic API key
-- Google OAuth credentials for sign-in
-- GitHub OAuth credentials for repo connection
-
-Run the one-shot setup:
-
-```sh
-cp .env.example .env
-bash setup.sh
-```
-
-Fill the required values in `.env`, then start the full stack:
-
-```sh
-docker compose up
-```
-
-Open:
-
-- Web app: http://localhost:3000
-- API docs: http://localhost:8000/docs
-- Health check: http://localhost:8000/health
-
-## Manual Local Development
-
-Start Postgres:
-
-```sh
-docker compose up db
-```
-
-Run the backend:
-
-```sh
-cd backend
-PYTHONPATH=. .venv/bin/alembic upgrade head
-PYTHONPATH=. .venv/bin/uvicorn src.main:app --reload --port 8000
-```
-
-Run the frontend:
-
-```sh
-cd web
-npm run dev
-```
-
-## Environment
-
-Important variables:
-
-| Variable | Required | Purpose |
-| --- | --- | --- |
-| `DATABASE_URL` | Yes | Async Postgres URL for FastAPI and Alembic. |
-| `JWT_SECRET` | Yes | Backend JWT signing secret. |
-| `NEXTAUTH_SECRET` | Yes | NextAuth session secret. |
-| `NEXTAUTH_URL` | Yes | Web app base URL, usually `http://localhost:3000`. |
-| `NEXT_PUBLIC_BACKEND_URL` | Yes | Browser-visible backend URL. |
-| `BACKEND_URL` | Yes | Server-side backend URL used by Next.js. |
-| `DAYTONA_API_KEY` | Yes | Creates isolated audit and fix sandboxes. |
-| `DAYTONA_SERVER_URL` | Yes | Daytona API URL, defaults to `https://app.daytona.io`. |
-| `ANTHROPIC_API_KEY` | Yes | Powers OpenCode agents and CATTS arbitration. |
-| `ANTHROPIC_API_KEYS` | Optional | Comma-separated Claude key pool for parallel runs. |
-| `ANTHROPIC_MODEL` | Optional | Defaults to `claude-sonnet-4-6`. |
-| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` | Yes for auth | Google sign-in. |
-| `GITHUB_CLIENT_ID` / `GITHUB_CLIENT_SECRET` | Yes for fixes | GitHub repo connection. |
-| `AGENTREADY_SANDBOX_IMAGE` | Optional | Custom Daytona image with Chromium, Playwright, and OpenCode. |
-| `SCOUT_ENABLED` | Optional | Enables scheduled autonomous scout cycles. |
-| `UNIPILE_DSN`, `UNIPILE_API_KEY`, `UNIPILE_ACCOUNT_ID` | Optional | Outbound email sending. |
-| `REPORT_BASE_URL` | Optional | Base URL used in public report links. |
-
-## Sandbox Image
-
-The audit and fix agents work best with the custom sandbox image in `docker/sandbox/`.
-
-Build locally:
-
-```sh
-cd docker/sandbox
-chmod +x build.sh entrypoint.sh
-./build.sh
-```
-
-To push a registry image Daytona can pull:
-
-```sh
-./build.sh ghcr.io/YOUR_ORG/agentready-sandbox:latest
-```
-
-Then set:
-
-```sh
-AGENTREADY_SANDBOX_IMAGE=ghcr.io/YOUR_ORG/agentready-sandbox:latest
-```
-
-If no custom image is configured, the backend falls back to Daytona's default Python snapshot and tries to self-heal OpenCode. Browser screenshots require the custom image.
-
-## API Overview
-
-Key endpoints:
+## Key endpoints
 
 | Method | Path | Purpose |
-| --- | --- | --- |
-| `GET` | `/health` | Liveness probe. |
-| `POST` | `/api/v1/audit/request` | Start a public audit for a domain. |
-| `GET` | `/api/v1/audit/{job_id}/stream` | Stream audit events and screenshots over SSE. |
-| `POST` | `/api/v1/fix/start` | Start a repo fix job for an authenticated client. |
-| `GET` | `/api/v1/fix/{job_id}/stream` | Stream fix job events over SSE. |
-| `POST` | `/api/v1/fix/verify` | Re-audit after a fix PR. |
-| `GET` | `/api/v1/report/{company_id}` | Public report JSON for outbound links. |
-| `POST` | `/api/v1/discovery/scout` | Trigger one scout cycle. |
-| `GET` | `/api/v1/discovery/targets` | List discovered and audited targets. |
-| `POST` | `/api/v1/outbound/send` | Send an audit report email for a company. |
+|---|---|---|
+| `POST` | `/api/v1/run` | Start an audit for a URL → `{run_id}` |
+| `GET` | `/api/v1/run/{id}/stream` | SSE of run events (frames, lines, score) |
+| `GET` | `/api/v1/run/{id}/state?cursor=N` | Poll the same events as JSON |
+| `POST` | `/api/v1/run/{id}/proxy` | Generate → host → verify the MCP proxy (Pro) |
+| `POST` | `/api/v1/run/{id}/fix` | Open the agent-ready GitHub PR (Pro) |
+| `POST/GET` | `/api/v1/proxy/{id}/mcp` | The hosted MCP endpoint (JSON-RPC: initialize / tools/list / tools/call) |
+| `GET` | `/api/v1/registry` | Public directory of hosted MCPs |
+| `GET` | `/api/v1/dashboard` | The signed-in user's audited targets |
+| `POST` | `/api/v1/billing/checkout` | Stripe Checkout session (Pro) |
 
-## Fix PR Output
+## Repo layout
 
-The fix agent attempts to generate:
+```
+backend/
+  src/
+    api/v1/endpoints/   run, proxy, dashboard, access(+billing), auth, github
+    services/           orchestrator, test_service, proxy_generator, proxy_runtime,
+                        verification_service, recon, code_analysis, github_harness_fix,
+                        entitlements, email, turnstile, score_service, mcp_monitor
+    agents/catts.py     consensus aggregation + arbiter
+    harness/            audit_driver.py, fix_driver.py, skills.py  (uploaded into sandboxes)
+    core/               config, auth, database, sandbox/daytona_client, llm/key_pool
+  scripts/              seed_registry.py, diag_frames.py, build_snapshot.py
+web/
+  src/app/              (marketing), (dashboard), run/[id], access, registry, signin, terms
+  src/components/run/   AgentGrid, LiveAgentViewport, ProxyPanel, FixWithGithub, ...
+```
 
-- `mcp-server/index.ts`
-- `mcp-server/package.json`
-- `mcp-server/tools/*`
-- `llms.txt`
-- `docs/agent-guide.md`
-- `openapi.json`
-- `evals/basic.ts`
+## Running locally
 
-The backend scores the generated artifacts, opens a GitHub PR, stores the result, and exposes before/after score projections in the dashboard.
+**Backend** (Python 3.12):
+```bash
+cd backend && uv sync
+# .env: DATABASE_URL, ANTHROPIC_API_KEYS, DAYTONA_API_KEY, JWT_SECRET, APP_BASE_URL,
+#       STRIPE_SECRET_KEY/STRIPE_PRICE_ID, RESEND_API_KEY/WIRABLE_EMAIL_FROM,
+#       TURNSTILE_SECRET_KEY, SENTRY_DSN, POSTHOG_KEY, WIRABLE_SANDBOX_IMAGE
+uvicorn src.main:app --reload
+```
 
-## Current Limitations
+**Frontend** (Node):
+```bash
+cd web && npm install && npm run dev
+# NEXT_PUBLIC_BACKEND_URL (or the /api/v1 rewrite via BACKEND_URL), and the
+# NEXT_PUBLIC_* keys for Turnstile / Sentry / PostHog
+```
 
-- The app still uses the internal `AgentReady` brand in UI copy and code while this repo is named `wirable`.
-- Production deployment needs hardened secrets, OAuth callback URLs, sandbox image registry access, and email compliance review.
-- The in-process SSE history is simple and effective for a hackathon demo, but should move to durable pub/sub for multi-instance production.
-- The autonomous scout and enrichment loop is best-effort and intentionally conservative about contact data.
-- Post-fix score is partly projected until the verification re-audit runs against the live deployment.
+Key tunables: `WIRABLE_MAX_STEPS` (audit depth, default 20), `WIRABLE_REQUIRE_AUTH`, `WIRABLE_UNLIMITED_CODES` / `WIRABLE_ACCESS_CODES`, `WIRABLE_SANDBOX_IMAGE`.
 
-## Submission Notes
+## Seeding / diagnostics
 
-Wirable is a working prototype for the moment when agents become a first-class integration surface. Instead of asking teams to read another checklist, it runs the checklist, shows evidence, writes the missing interface, and ships the fix as a PR.
+- `python -m scripts.seed_registry "<url>[|openapi_spec_url[|api_base]]" ...` — run real audits + host MCPs to populate the registry (grounds tools in real specs when available).
+- `python -m scripts.diag_frames <url>` — run the harness in a sandbox and dump every captured frame (byte size + caption) to debug the live screenshot stream.
 
-Built for Paris Builds 2026.
+---
+
+*Wirable hosts the bridge so agents can use a product **today**, while the PR makes it natively agent-ready for tomorrow.*

@@ -495,7 +495,10 @@ async def run_single_audit(
             # deep cost — but EVERY agent now streams its screenshots so all N
             # tiles in the live grid show their own frames (each frame is tagged
             # with this agent_id; seqs are namespaced per agent on the frontend).
-            mission = "deep" if agent_id == 0 else "fast"
+            # All agents run the DEEP mission: every consensus voter does the
+            # full agentic walk, so each switcher tab shows real work (not a
+            # single probe frame) and votes are independent deep verdicts.
+            mission = "deep"
             audit_cmd = f"cd /tmp && python3 /tmp/audit_driver.py {shlex.quote(url)} {mission} 2>&1 || true"
             # Only agent 0 bridges the human-in-the-loop mailbox (one per run).
             try:

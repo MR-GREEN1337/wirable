@@ -43,12 +43,16 @@ FALLBACK_SNAPSHOT = "daytonaio/sandbox:0.8.0"
 def _resolve_image() -> str:
     """Sandbox image name, env-overridable.
 
-    Mirrors Crossnode's CROSSNODE_SANDBOX_IMAGE pattern: prefer the
-    AGENTREADY_SANDBOX_IMAGE env var, fall back to the baked HARNESS_IMAGE
-    constant. (The snapshot fallback in sandbox() handles the case where the
-    resolved image is unavailable in the Daytona registry.)
+    Prefer WIRABLE_SANDBOX_IMAGE; fall back to the legacy AGENTREADY_SANDBOX_IMAGE
+    name (pre-rename) and then the baked HARNESS_IMAGE constant. (The snapshot
+    fallback in sandbox() handles the case where the resolved image is
+    unavailable in the Daytona registry.)
     """
-    return os.getenv("AGENTREADY_SANDBOX_IMAGE") or HARNESS_IMAGE
+    return (
+        os.getenv("WIRABLE_SANDBOX_IMAGE")
+        or os.getenv("AGENTREADY_SANDBOX_IMAGE")
+        or HARNESS_IMAGE
+    )
 
 _AUTOSTOP_MINUTES = 30  # sandbox auto-stops after this many idle minutes
 
@@ -259,7 +263,11 @@ class DaytonaClient:
 
         # Primary: our prebuilt Daytona snapshot (agent-browser + Chrome + python
         # baked in — see scripts/build_snapshot.py). Fallback: the stock sandbox.
-        snapshot_name = os.getenv("AGENTREADY_SANDBOX_IMAGE") or "wirable-agent"
+        snapshot_name = (
+            os.getenv("WIRABLE_SANDBOX_IMAGE")
+            or os.getenv("AGENTREADY_SANDBOX_IMAGE")
+            or "wirable-agent"
+        )
         try:
             # --- create: primary snapshot, fall back to the stock sandbox ---
             try:
