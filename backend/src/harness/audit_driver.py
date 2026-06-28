@@ -56,7 +56,7 @@ SHOT_DIR = "/tmp/screenshots"
 ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
 # Machine discovery now carries the verdict weight, so the human path is short.
-MAX_STEPS = int(os.environ.get("WIRABLE_MAX_STEPS", "16"))
+MAX_STEPS = int(os.environ.get("WIRABLE_MAX_STEPS", "20"))
 
 os.makedirs(SHOT_DIR, exist_ok=True)
 _frame = 0
@@ -293,8 +293,44 @@ def run_bash(cmd: str, timeout: int = 60) -> str:
         return f"__err__ {e}"
 
 
+def _page_painted(wait_s: float = 2.5) -> bool:
+    """True once a REAL document is on screen (not about:blank / unpainted).
+
+    Polls briefly so a shot taken right after a navigation captures the loaded
+    page instead of a white in-transition frame. Returns False ONLY when the tab
+    is genuinely blank (about:blank / no document) — so we never emit white
+    frames, but we also never drop a real-but-sparse page.
+    """
+    import time as _t
+    deadline = _t.time() + wait_s
+    while True:
+        href = ab("eval", "location.href", timeout=8) or ""
+        blank = (not href) or href.startswith("__err__") or "about:blank" in href
+        if not blank:
+            probe = ab(
+                "eval",
+                "String(document.body?document.body.innerText.trim().length:0)+'|'+"
+                "String(document.querySelectorAll('img,svg,canvas,video,input,button').length)",
+                timeout=8,
+            )
+            try:
+                txt, vis = probe.split("|")
+                if int(txt) > 3 or int(vis) > 0:
+                    return True
+            except Exception:  # noqa: BLE001
+                return True  # eval ran but odd shape — assume painted
+        if _t.time() > deadline:
+            return not blank  # real URL but sparse → still capture; about:blank → skip
+        _t.sleep(0.4)
+
+
 def shot(caption: str, dimension: str = "general") -> None:
     global _frame
+    # Never emit a white frame: skip the capture entirely when the tab is blank
+    # (e.g. a status shot before the page opens or after it's closed). The live
+    # viewport keeps the previous real frame instead of flashing white.
+    if not _page_painted():
+        return
     _frame += 1
     stem = f"{SHOT_DIR}/{_frame:04d}"
     ab("screenshot", f"{stem}.jpg", timeout=30)
@@ -439,9 +475,12 @@ def claude_json(system: str, prompt: str, max_tokens: int = 2200, image_b64: str
 
 def screen_b64() -> str:
     """Capture the current page as a base64 JPEG for vision grounding. Best-effort,
-    size-capped so a huge frame never blows the request."""
+    size-capped so a huge frame never blows the request. Returns "" on a blank
+    page so the model falls back to the a11y tree instead of 'seeing' white."""
     try:
         import base64 as _b64
+        if not _page_painted(1.5):
+            return ""
         p = "/tmp/_vision.jpg"
         ab("screenshot", p, timeout=20)
         if os.path.exists(p):
@@ -955,7 +994,7 @@ def deep_explore(machine: dict) -> dict:
     machine_first = bool(machine.get("machine_path_present"))
     # Even machine-first targets deserve a real exploration (docs + API ref +
     # auth + an example call + an error), not a 2-step "yep there's a spec".
-    step_cap = max(12, MAX_STEPS - 4) if machine_first else MAX_STEPS
+    step_cap = max(16, MAX_STEPS - 2) if machine_first else MAX_STEPS
     # A bound repo means real white-box work to do in the loop; give a few more
     # steps so the agent can cross-check code routes against live behavior.
     if HAS_REPO:
@@ -1037,6 +1076,54 @@ def deep_explore(machine: dict) -> dict:
         except Exception:  # noqa: BLE001
             pass
 
+    # Minimum-depth floor: the model loves to declare "done" on step 1, which
+    # makes the run end in a couple frames. Force a real walk — when it tries to
+    # finish early we feed the NEXT concrete sub-goal and keep going until we've
+    # done at least MIN_STEPS. Sub-goals are mode-specific (the things an agent
+    # would actually do on this kind of product).
+    base_goal = goal
+    if machine_first:
+        depth_nudges = [
+            "Open the docs or API reference now and read an actual endpoint page.",
+            "Find the authentication section — exactly how does an agent get a key/token?",
+            "Open llms.txt or the OpenAPI/Swagger spec and read what it declares.",
+            "Find a concrete example request (method, path, params).",
+            "Find what an ERROR response looks like (status code + body shape).",
+            "Look for an MCP endpoint or a machine-readable manifest.",
+        ]
+    elif HAS_CREDS:
+        depth_nudges = [
+            "Find the login and sign in with the provided credentials.",
+            "Reach the authenticated dashboard.",
+            "Perform the product's core action so we see an agent using it.",
+            "Trigger one invalid action and observe the error.",
+            "Repeat a write to test idempotency.",
+        ]
+    else:
+        depth_nudges = [
+            "Find and open the signup form.",
+            "Fill it with the test credentials and submit.",
+            "Reach the dashboard / first authenticated screen.",
+            "Perform the product's core action.",
+            "Trigger an invalid action and observe the error, then retry it.",
+        ]
+    MIN_STEPS = min(step_cap, max(6, len(depth_nudges)))
+    _nudge_i = 0
+
+    # Concrete URLs the machine probe already found (openapi spec, llms.txt, mcp
+    # manifest, doc pages). On a machine-first stall we OPEN the next one so the
+    # agent actually walks the surface (and the frame changes) instead of
+    # re-observing the landing. Reading a real spec/docs page is the demo money.
+    nav_urls: list[str] = []
+    if machine_first:
+        if machine.get("openapi_url"):
+            nav_urls.append(str(machine["openapi_url"]))
+        for s in (machine.get("surfaces") or []):
+            u = s.get("url") if isinstance(s, dict) else None
+            if u and u not in nav_urls:
+                nav_urls.append(str(u))
+    _nav_i = 0
+
     recent_sigs: list[str] = []  # loop-guard signatures
     asked_walls: set[str] = set()  # walls we've already asked the human about
     api_calls: list[dict] = []  # accumulated real backend calls (deduped below)
@@ -1109,6 +1196,26 @@ def deep_explore(machine: dict) -> dict:
         )
 
         if not a or a.get("action") in (None, "done"):
+            # Depth floor: don't let it stop on step 1 — push the next concrete
+            # sub-goal and keep walking until we've done a real exploration.
+            if (step + 1) < MIN_STEPS and _nudge_i < len(depth_nudges):
+                nudge = depth_nudges[_nudge_i]
+                _nudge_i += 1
+                # Machine-first: actually navigate to the next discovered surface
+                # so the agent reads a real spec/docs page (frame changes too).
+                if machine_first and _nav_i < len(nav_urls):
+                    ab_open(nav_urls[_nav_i])
+                    nudge = f"You are now on {nav_urls[_nav_i]} — read it as an agent would. " + nudge
+                    _nav_i += 1
+                goal = (
+                    base_goal
+                    + "\n\nDo NOT finish yet — you've barely started. NEXT, do this "
+                    + f"concrete thing: {nudge}"
+                )
+                trajectory.append({"caption": "going deeper", "note": nudge[:70],
+                                   "dimension": "general"})
+                recent_sigs.clear()  # the nudge changes intent — don't trip the loop-guard
+                continue
             trajectory.append({"caption": a.get("caption", "exploration complete") if a else "stop",
                                "note": a.get("note", "") if a else "", "dimension": "general"})
             break
