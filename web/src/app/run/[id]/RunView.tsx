@@ -325,6 +325,7 @@ export function RunView({ runId, domain }: { runId: string; domain: string }) {
   const [authOpen, setAuthOpen] = useState(false);
   const [proxySubmitting, setProxySubmitting] = useState(false);
   const [proxyError, setProxyError] = useState<string | null>(null);
+  const [upgrading, setUpgrading] = useState(false);
   // Bumping this remounts the poll loop (with a fresh cursor=0 replay) — used
   // after the proxy FIX flow kicks off so its new events stream in live too.
   const [pollEpoch, setPollEpoch] = useState(0);
@@ -391,6 +392,28 @@ export function RunView({ runId, domain }: { runId: string; domain: string }) {
       setProxyError("Could not start proxy generation. Try again.");
     } finally {
       setProxySubmitting(false);
+    }
+  }
+
+  // Upgrade → Stripe checkout. Robust: the old inline `proToken && beginCheckout`
+  // silently no-op'd when the session token wasn't loaded, and swallowed any
+  // checkout error — so the button "did nothing". Now we always react.
+  async function handleUpgrade() {
+    setProxyError(null);
+    if (!proToken) {
+      // Not signed in (or session not loaded) — send them where they can pay.
+      window.location.href = "/access";
+      return;
+    }
+    setUpgrading(true);
+    try {
+      await beginCheckout(proToken); // redirects to Stripe on success
+    } catch (e) {
+      setProxyError(
+        e instanceof Error ? e.message : "Couldn’t start checkout. Try again.",
+      );
+    } finally {
+      setUpgrading(false);
     }
   }
 
@@ -615,8 +638,8 @@ export function RunView({ runId, domain }: { runId: string; domain: string }) {
                         </CtaButton>
                       ) : (
                         <div className="flex flex-col gap-1.5">
-                          <CtaButton onClick={() => proToken && beginCheckout(proToken)} size="sm">
-                            Upgrade to Pro to host the proxy
+                          <CtaButton onClick={handleUpgrade} size="sm" disabled={upgrading}>
+                            {upgrading ? "Opening checkout…" : "Upgrade to Pro to host the proxy"}
                           </CtaButton>
                           <span className="text-[11px]" style={{ color: "var(--fg-subtle)" }}>
                             The audit is free. Hosting the MCP proxy that fixes it is Pro.

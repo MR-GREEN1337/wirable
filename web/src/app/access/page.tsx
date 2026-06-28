@@ -14,7 +14,7 @@ import { signIn, useSession } from "next-auth/react";
 import { CheckCircle2, KeyRound, Loader2 } from "lucide-react";
 import { Logo } from "@/components/global/Logo";
 import { CtaButton } from "@/components/CtaButton";
-import { redeemCode } from "@/components/AccessGate";
+import { redeemCode, beginCheckout } from "@/components/AccessGate";
 import { cn } from "@/lib/utils";
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_BACKEND_URL ?? "";
@@ -28,11 +28,29 @@ export default function AccessPage() {
   const [code, setCode] = useState("");
   const [phase, setPhase] = useState<Phase>("idle");
   const [error, setError] = useState<string | null>(null);
+  const [checkingOut, setCheckingOut] = useState(false);
 
   // The code pulled from ?code= — drives the auto-redeem flow.
   const autoCode = useRef<string | null>(null);
   // Guard so we only ever fire the auto flow once.
   const autoFired = useRef(false);
+
+  // Pay by card → Stripe checkout. If not signed in yet, start a guest session
+  // first (checkout needs a user), then the visitor clicks again.
+  async function handleCheckout() {
+    setError(null);
+    if (!token) {
+      await startGuest();
+      return;
+    }
+    setCheckingOut(true);
+    try {
+      await beginCheckout(token); // redirects to Stripe on success
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn’t start checkout. Try again.");
+      setCheckingOut(false);
+    }
+  }
 
   // Start a guest session (no email) so a judge link "just works".
   const startGuest = useCallback(async () => {
@@ -215,6 +233,28 @@ export default function AccessPage() {
             <p className="text-center text-[11px]" style={{ color: "var(--fg-subtle)" }}>
               Free for judges &amp; hackathon viewers · no email required
             </p>
+
+            {/* Or pay by card — the real Pro upgrade (Stripe checkout). */}
+            <div className="flex items-center gap-2 pt-1">
+              <span className="h-px flex-1" style={{ background: "var(--border)" }} />
+              <span className="text-[11px]" style={{ color: "var(--fg-subtle)" }}>or</span>
+              <span className="h-px flex-1" style={{ background: "var(--border)" }} />
+            </div>
+            <button
+              type="button"
+              onClick={handleCheckout}
+              disabled={checkingOut}
+              className="flex h-11 w-full items-center justify-center gap-2 rounded border text-sm font-medium transition-colors duration-[80ms] disabled:opacity-50"
+              style={{ borderColor: "var(--border-strong)", color: "var(--foreground)" }}
+            >
+              {checkingOut ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin" /> Opening checkout…
+                </>
+              ) : (
+                "Upgrade to Pro — pay by card"
+              )}
+            </button>
           </form>
         )}
       </div>

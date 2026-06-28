@@ -546,7 +546,7 @@ export default async function LandingPage() {
                   <li>Drift monitoring: re-checks on every commit</li>
                   <li>GitHub fix PRs (llms.txt, AGENTS.md, MCP manifest)</li>
                 </ul>
-                <a href="/signin" className="mt-7 inline-flex h-11 items-center justify-center rounded text-sm font-semibold cn-hover"
+                <a href="/access" className="mt-7 inline-flex h-11 items-center justify-center rounded text-sm font-semibold cn-hover"
                   style={{ background: "var(--primary)", color: "var(--primary-foreground)" }}>
                   Go Pro
                 </a>
