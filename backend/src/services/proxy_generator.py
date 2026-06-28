@@ -31,6 +31,7 @@ Design constraints honored:
 """
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any, Awaitable, Callable, Optional
 from urllib.parse import urlsplit
@@ -79,6 +80,7 @@ _SKIP_PATH_SIGNALS = (
 )
 _MUTATING_METHODS = {"post", "put", "patch", "delete"}
 _MAX_TOOLS = 24  # bound the generated surface
+_DESC_CONCURRENCY = 6  # parallel per-tool LLM description calls (was fully serial)
 
 
 # ===========================================================================
@@ -179,12 +181,21 @@ async def _discover_best_openapi(base_url: str) -> dict:
     the spec with the most paths found anywhere, or {} if none. Bounded: at most
     one fetch_openapi attempt per candidate host. Never raises.
     """
-    best: dict = {}
-    for host_base in _candidate_api_hosts(base_url):
+    hosts = _candidate_api_hosts(base_url)
+
+    async def _probe(host_base: str):
         try:
-            spec = await recon_mod.fetch_openapi(host_base)
+            return host_base, await recon_mod.fetch_openapi(host_base)
         except Exception:
-            spec = None
+            return host_base, None
+
+    # Probe every candidate host CONCURRENTLY. Serial probing meant up to
+    # 15 hosts × the per-host timeout in sequence — minutes of silent blocking
+    # when subdomains are firewalled/dead. gather caps it at one host's latency.
+    results = await asyncio.gather(*(_probe(h) for h in hosts))
+
+    best: dict = {}
+    for host_base, spec in results:
         if not isinstance(spec, dict):
             continue
         npaths = len(spec.get("paths") or {}) if isinstance(spec.get("paths"), dict) else 0
@@ -197,6 +208,37 @@ async def _discover_best_openapi(base_url: str) -> dict:
 # ===========================================================================
 # (1) generate_proxy_config
 # ===========================================================================
+
+
+def minimal_proxy_config(
+    target_id: str,
+    *,
+    run_id: Optional[str] = None,
+    auth: Optional[dict] = None,
+    base_url: str = "",
+    mcp_url: Optional[str] = None,
+) -> ProxyConfig:
+    """A network/LLM-free generic config built synchronously — the deadline
+    fallback used when discovery or sandbox provisioning blocks past the generate
+    budget. Always instant: one generic `request` passthrough tool so the proxy is
+    deployable + non-empty even when grounding timed out."""
+    tid = target_id
+    mcp_url = mcp_url or f"/api/v1/proxy/{tid}/mcp"
+    resolved = (
+        recon_mod.normalize_url(base_url)
+        or _base_url_from_history(run_id or tid)
+        or base_url
+    )
+    resolved = (resolved or "").rstrip("/")
+    tools = [_generic_http_tool(resolved)]
+    return ProxyConfig(
+        target_id=tid,
+        kind="api",
+        base_url=resolved,
+        auth_ref=f"auth:{tid}" if auth else None,
+        tools=tools,
+        advertise=_build_advertise(tid, resolved, tools, mcp_url),
+    )
 
 
 async def generate_proxy_config(
@@ -442,15 +484,26 @@ async def _tools_from_openapi(
         if len(raw_ops) >= _MAX_TOOLS:
             break
 
-    tools: list[ProxyTool] = []
+    # Names first (sequential — dedup is order-dependent + cheap), then resolve
+    # descriptions CONCURRENTLY. The per-tool description was the only awaited
+    # step and ran serially (up to _MAX_TOOLS back-to-back LLM calls); gather
+    # bounded by _DESC_CONCURRENCY collapses that to ~one round-trip. Rows are
+    # still emitted in order so the live builder stream is unchanged.
     seen_names: set[str] = set()
+    prepared: list[tuple[str, str, str, dict]] = []
     for entry in raw_ops:
         path, method, op = entry["path"], entry["method"], entry["op"]
         name = _tool_name(method, path, op, seen_names)
         seen_names.add(name)
+        prepared.append((name, method, path, op))
 
+    descriptions = await _describe_tools_concurrently(
+        [(n, m, p, o) for (n, m, p, o) in prepared]
+    )
+
+    tools: list[ProxyTool] = []
+    for (name, method, path, op), description in zip(prepared, descriptions):
         input_schema, param_map, body_fields = _input_schema_from_op(op, path)
-        description = await _describe_http_tool(name, method, path, op)
         error_rules = _http_error_rules(op)
         key_fields = _idempotency_keys(method, path, body_fields, op)
 
@@ -471,6 +524,22 @@ async def _tools_from_openapi(
         tools.append(tool)
         await _emit_tool_row(emit, tool)
     return tools
+
+
+async def _describe_tools_concurrently(
+    items: list[tuple[str, str, str, dict]]
+) -> list[str]:
+    """Resolve `_describe_http_tool` for many (name, method, path, op) tuples in
+    parallel, bounded by `_DESC_CONCURRENCY`. Order-preserving."""
+    sem = asyncio.Semaphore(_DESC_CONCURRENCY)
+
+    async def _one(name: str, method: str, path: str, op: dict) -> str:
+        async with sem:
+            return await _describe_http_tool(name, method, path, op)
+
+    return list(
+        await asyncio.gather(*(_one(n, m, p, o) for (n, m, p, o) in items))
+    )
 
 
 # --- Code path: code_analysis endpoints -> http ProxyTools -----------------
@@ -594,9 +663,11 @@ async def _tools_from_code_endpoints(
     Skips infra paths (health/metrics/etc.) and bounds the surface.
     """
     spec_base = (base_url or "").rstrip("/")
-    tools: list[ProxyTool] = []
     seen_names: set[str] = set()
 
+    # Names first (sequential dedup, cheap), capped at _MAX_TOOLS; then resolve
+    # descriptions CONCURRENTLY (was one serial LLM call per endpoint).
+    prepared: list[tuple[str, str, str, dict]] = []
     for ep in endpoints:
         if not isinstance(ep, dict):
             continue
@@ -611,12 +682,19 @@ async def _tools_from_code_endpoints(
 
         norm_path = _normalize_path_template(path)
         op = _op_from_endpoint(ep, norm_path, method)
-
         name = _tool_name(method, norm_path, op, seen_names)
         seen_names.add(name)
+        prepared.append((name, method, norm_path, op))
+        if len(prepared) >= _MAX_TOOLS:
+            break
 
+    descriptions = await _describe_tools_concurrently(
+        [(n, m, p, o) for (n, m, p, o) in prepared]
+    )
+
+    tools: list[ProxyTool] = []
+    for (name, method, norm_path, op), description in zip(prepared, descriptions):
         input_schema, param_map, body_fields = _input_schema_from_op(op, norm_path)
-        description = await _describe_http_tool(name, method, norm_path, op)
         error_rules = _http_error_rules(op)
         key_fields = _idempotency_keys(method, norm_path, body_fields, op)
 
@@ -636,8 +714,6 @@ async def _tools_from_code_endpoints(
         )
         tools.append(tool)
         await _emit_tool_row(emit, tool)
-        if len(tools) >= _MAX_TOOLS:
-            break
 
     return tools
 

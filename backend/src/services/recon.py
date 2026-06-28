@@ -18,13 +18,14 @@ the raw signals so both the test path and verify path see the SAME facts).
 """
 from __future__ import annotations
 
+import asyncio
 import re
 from typing import Any, Optional
 
 import httpx
 from loguru import logger
 
-_PROBE_TIMEOUT_S = 8.0
+_PROBE_TIMEOUT_S = 4.0
 
 # Candidate locations for a machine-readable API description.
 OPENAPI_PATHS: tuple[str, ...] = (
@@ -104,24 +105,36 @@ async def fetch_openapi(base_url: str) -> Optional[dict]:
     base_url = normalize_url(base_url)
     if not base_url:
         return None
+    candidate_paths = [
+        p for p in OPENAPI_PATHS if not p.endswith((".yaml", ".yml"))
+    ]
     async with httpx.AsyncClient(
         timeout=_PROBE_TIMEOUT_S, follow_redirects=True
     ) as client:
-        for path in OPENAPI_PATHS:
-            if path.endswith((".yaml", ".yml")):
-                continue  # no yaml parser available; skip
+        async def _try(path: str) -> Optional[dict]:
             resp = await _get(client, base_url + path)
             if resp is None or resp.status_code >= 400:
-                continue
+                return None
             try:
                 spec = resp.json()
             except Exception:
-                continue
-            if isinstance(spec, dict) and (
-                spec.get("openapi") or spec.get("swagger")
-            ) and isinstance(spec.get("paths"), dict):
+                return None
+            if (
+                isinstance(spec, dict)
+                and (spec.get("openapi") or spec.get("swagger"))
+                and isinstance(spec.get("paths"), dict)
+            ):
                 logger.debug("recon: found OpenAPI at {}{}", base_url, path)
                 return spec
+            return None
+
+        # Probe all common spec locations CONCURRENTLY (was serial: 7 paths ×
+        # the timeout in sequence per host). Return the first hit in declared
+        # priority order so the canonical /openapi.json still wins ties.
+        specs = await asyncio.gather(*(_try(p) for p in candidate_paths))
+    for spec in specs:
+        if spec is not None:
+            return spec
     return None
 
 

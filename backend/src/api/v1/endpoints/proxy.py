@@ -18,6 +18,7 @@ Auth: tools/call requires an owner-issued scoped agent key, supplied as
 `Authorization: Bearer <key>` (or `X-Agent-Key: <key>`). The owner's UPSTREAM
 credential is injected server-side by the runtime and never exposed to callers.
 """
+import asyncio
 import inspect
 import json as _json_mod
 from typing import Any, Optional
@@ -43,6 +44,10 @@ from ....services import (
 )
 
 router = APIRouter(tags=["proxy"])
+
+# Hard ceiling on the generate phase (grounding/discovery). Past this we ship a
+# generic proxy rather than letting the run hang silently on "generate".
+_GENERATE_DEADLINE_S = 90.0
 
 
 class ProxyRequest(BaseModel):
@@ -273,18 +278,53 @@ async def create_proxy(
             await test_service.emit(
                 run_id, events.line(True, "proxy: building the MCP proxy…")
             )
-            # If a repo is bound, analyze its source FIRST so the MCP is grounded
-            # in real endpoints (ground truth) instead of black-box probes.
-            code_endpoints, code_base_url = await _analyze_bound_repo(
-                run_id, gh_token, gh_repo
-            )
-            config = await _gen_config(
-                run_id,
-                body.auth,
-                proxy_id,
-                code_endpoints=code_endpoints,
-                code_base_url=code_base_url,
-            )
+
+            async def _build_config():
+                # If a repo is bound, analyze its source FIRST so the MCP is
+                # grounded in real endpoints (ground truth) instead of black-box
+                # probes.
+                code_endpoints, code_base_url = await _analyze_bound_repo(
+                    run_id, gh_token, gh_repo
+                )
+                return await _gen_config(
+                    run_id,
+                    body.auth,
+                    proxy_id,
+                    code_endpoints=code_endpoints,
+                    code_base_url=code_base_url,
+                )
+
+            # Hard deadline on the whole generate phase. Grounding can block for
+            # minutes (Daytona sandbox provisioning on the repo path, or the
+            # subdomain OpenAPI sweep on the black-box path); without this the
+            # `generate` phase emits `start` and then hangs with no `done`. On
+            # timeout we degrade to a deployable generic-tool proxy instead.
+            try:
+                config = await asyncio.wait_for(
+                    _build_config(), timeout=_GENERATE_DEADLINE_S
+                )
+            except Exception as gen_exc:
+                is_timeout = isinstance(gen_exc, asyncio.TimeoutError)
+                if is_timeout:
+                    logger.warning(
+                        "[proxy] generate exceeded %ss for %s — degrading to a "
+                        "generic proxy",
+                        _GENERATE_DEADLINE_S,
+                        run_id,
+                    )
+                    await test_service.emit(
+                        run_id,
+                        events.line(
+                            True,
+                            "proxy: grounding took too long — deploying a generic "
+                            "proxy you can refine",
+                        ),
+                    )
+                else:
+                    logger.exception("[proxy] generate failed for %s", run_id)
+                config = proxy_generator.minimal_proxy_config(
+                    proxy_id, run_id=run_id, auth=body.auth, mcp_url=mcp_url
+                )
             await test_service.emit(run_id, events.phase("generate", "done"))
 
             # --- deploy (persist + host) -------------------------------------

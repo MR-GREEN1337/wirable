@@ -55,6 +55,11 @@ def _resolve_image() -> str:
     )
 
 _AUTOSTOP_MINUTES = 30  # sandbox auto-stops after this many idle minutes
+# Wait-until-RUNNING ceiling per create attempt. Kept tight: a missing primary
+# snapshot pays this twice (primary + fallback), so 180s×2 = 6min of silent
+# blocking on a callers' critical path (e.g. proxy generate). 60s is plenty for
+# a warm snapshot and fails fast to the fallback otherwise.
+_CREATE_TIMEOUT_S = 60
 
 
 class SandboxHandle:
@@ -255,7 +260,11 @@ class DaytonaClient:
                 "OPENCODE_MODEL", f"anthropic/{resolved_env['ANTHROPIC_MODEL']}"
             )
 
-        client = DaytonaClient._make_client()
+        # NOTE: client is created INSIDE the try so its close() in `finally` is
+        # unconditional. Creating it before the try left a window (env/import
+        # setup) where an early raise leaked the client's aiohttp session —
+        # surfaced in Sentry as "Unclosed client session" on the run path.
+        client = None
         sandbox = None
         session_id = f"ar-{uuid.uuid4().hex[:8]}"
 
@@ -269,13 +278,14 @@ class DaytonaClient:
             or "wirable-agent"
         )
         try:
+            client = DaytonaClient._make_client()
             # --- create: primary snapshot, fall back to the stock sandbox ---
             try:
                 params = CreateSandboxFromSnapshotParams(
                     snapshot=snapshot_name,
                     auto_stop_interval=_AUTOSTOP_MINUTES,
                 )
-                sandbox = await client.create(params, timeout=180)  # wait until RUNNING
+                sandbox = await client.create(params, timeout=_CREATE_TIMEOUT_S)  # wait until RUNNING
                 logger.debug("Daytona sandbox from snapshot %s: %s", snapshot_name, sandbox.id)
             except Exception as snap_err:
                 logger.warning("Snapshot %s unavailable (%s), falling back to %s", snapshot_name, snap_err, FALLBACK_SNAPSHOT)
@@ -283,7 +293,7 @@ class DaytonaClient:
                     snapshot=FALLBACK_SNAPSHOT,
                     auto_stop_interval=_AUTOSTOP_MINUTES,
                 )
-                sandbox = await client.create(params, timeout=180)  # wait until RUNNING
+                sandbox = await client.create(params, timeout=_CREATE_TIMEOUT_S)  # wait until RUNNING
 
             # --- runs for EITHER create path (was wrongly nested under except) ---
             await sandbox.process.create_session(session_id)
@@ -324,7 +334,8 @@ class DaytonaClient:
                     logger.warning("Failed to delete sandbox: %s", e)
             # Always close the client — it owns an aiohttp ClientSession that
             # otherwise leaks once per run ("Unclosed client session" in Sentry).
-            try:
-                await client.close()
-            except Exception as e:
-                logger.debug("Daytona client close failed: %s", e)
+            if client is not None:
+                try:
+                    await client.close()
+                except Exception as e:
+                    logger.debug("Daytona client close failed: %s", e)
