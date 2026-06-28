@@ -366,9 +366,22 @@ export function RunView({ runId, domain }: { runId: string; domain: string }) {
     try {
       const res = await fetch(`${BACKEND_URL}/api/v1/run/${runId}/proxy`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          // Hosting the proxy is auth'd + Pro-gated — send the bearer token
+          // (the endpoint 401s without it, which surfaced as a generic error).
+          ...(proToken ? { Authorization: `Bearer ${proToken}` } : {}),
+        },
         body: JSON.stringify({ auth }),
       });
+      if (res.status === 401) {
+        setProxyError("Sign in to host the MCP proxy.");
+        return;
+      }
+      if (res.status === 402) {
+        setProxyError("Upgrade to Pro to host the MCP proxy.");
+        return;
+      }
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       // The base poll loop stopped at the run's terminal `done`. Spin up a fresh
       // poll session to stream the proxy/fix_pr/verify events that follow.

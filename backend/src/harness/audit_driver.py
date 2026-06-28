@@ -247,6 +247,25 @@ def ab(*args: str, timeout: int = 60) -> str:
         return f"__err__ {e}"
 
 
+def ab_open(url: str, timeout: int = 90) -> str:
+    """Open a URL and SETTLE before the caller snapshots/screenshots.
+
+    Plain `open` can return before the page paints — heavy SPA landings then get
+    a blank first frame (and the agent sees nothing and bails early). We wait for
+    document.readyState=complete (capped) plus a short paint settle so the very
+    first frame is the real rendered page. eval awaits promises here.
+    """
+    out = ab("open", url, timeout=timeout)
+    # Wait for load (hard-capped at 6s so a never-idle page can't hang the step).
+    ab("eval",
+       "new Promise(r=>{if(document.readyState==='complete')return r();"
+       "addEventListener('load',()=>r());setTimeout(r,6000)})",
+       timeout=12)
+    # Paint/layout settle for client-rendered content.
+    ab("eval", "new Promise(r=>setTimeout(r,900))", timeout=4)
+    return out
+
+
 # Cap on bash output folded back to the model so a noisy command can't blow the
 # context budget. Stdout+stderr are merged; the tail is dropped past the cap.
 _BASH_MAX_OUT = int(os.environ.get("WIRABLE_BASH_MAX_OUT", "6000"))
@@ -745,7 +764,7 @@ def run_action(a: dict) -> None:
     elif act == "find_click" and a.get("name"):
         ab("find", "role", "button", "click", "--name", a["name"])
     elif act == "open" and a.get("value"):
-        ab("open", a["value"], timeout=60)
+        ab_open(a["value"], timeout=60)
     elif act == "scroll":
         ab("eval", "window.scrollBy(0, 700)")
     elif act == "wait":
@@ -939,7 +958,7 @@ def deep_explore(machine: dict) -> dict:
     # steps so the agent can cross-check code routes against live behavior.
     if HAS_REPO:
         step_cap = max(step_cap, MAX_STEPS) + 4
-    ab("open", URL, timeout=90)
+    ab_open(URL, timeout=90)
     # Best-effort: start recording the real API calls the app makes from here on.
     install_api_capture()
     shot("Landing — what an agent first sees", "general")
@@ -1284,7 +1303,7 @@ def main() -> None:
 
     # Phase 2 — human path (bounded, CAPTCHA-aware), unless probe-only.
     if MISSION == "fast":
-        ab("open", URL, timeout=60)
+        ab_open(URL, timeout=60)
         shot("Landing (probe pass)", "general")
         explore = {"trajectory": [], "blockers": [], "api_calls": []}
         final_snap = ab("snapshot", timeout=45)
